@@ -1,0 +1,377 @@
+---
+name: command-analyzer
+description: |
+  Specialized sub-agent for deep command analysis when deterministic
+  validation isn't sufficient. Uses LLM reasoning for ambiguous cases.
+  Invoked by command-verify skill only when needed.
+version: 1.0.0
+agent_type: sub-agent
+
+# Parent skill
+parent: command-verify
+
+# When to invoke this sub-agent
+invocation_triggers:
+  ambiguous_command:
+    description: "Command doesn't match known patterns"
+    example: "custom-script.sh --weird-flag"
+    cost: "~1000 tokens"
+
+  conflicting_rules:
+    description: "Multiple safety rules apply"
+    example: "npm run test:production --clean"
+    cost: "~800 tokens"
+
+  never_seen_before:
+    description: "First time encountering this command type"
+    example: "deno run --allow-all script.ts"
+    cost: "~1200 tokens"
+
+  user_requests_explanation:
+    description: "User asks 'why' or 'explain'"
+    example: "Why is this command dangerous?"
+    cost: "~600 tokens"
+
+  validation_uncertainty:
+    description: "Confidence < 80%"
+    example: "Complex shell script with pipes"
+    cost: "~1500 tokens"
+
+# Capabilities (requires LLM)
+capabilities:
+  command_parsing:
+    description: "Parse complex shell syntax"
+    techniques:
+      - "Tokenize command and flags"
+      - "Identify command chain (pipes, &&, ||)"
+      - "Extract arguments and options"
+      - "Detect heredocs and subshells"
+
+  safety_reasoning:
+    description: "Deep analysis of command safety"
+    considers:
+      - "What files does it read/write?"
+      - "What network calls does it make?"
+      - "What side effects does it have?"
+      - "Can it be reversed if it fails?"
+      - "What permissions does it need?"
+
+  intent_understanding:
+    description: "Understand what command is trying to do"
+    analyzes:
+      - "Documentation context around command"
+      - "Related commands in same section"
+      - "Variable names and patterns"
+      - "Comments in code blocks"
+
+  alternative_suggestion:
+    description: "Suggest safer alternatives"
+    examples:
+      - "rm -rf dist → npx rimraf dist (cross-platform)"
+      - "curl | bash → Download, inspect, then run"
+      - "sudo npm install → Use nvm or proper permissions"
+
+# Sub-agent behavior
+behavior:
+  analysis_depth:
+    quick: |
+      For simple ambiguity (500-800 tokens):
+      1. Parse command structure
+      2. Match against known patterns
+      3. Categorize safety
+      4. Return decision
+
+    medium: |
+      For moderate complexity (800-1500 tokens):
+      1. Full parsing with context
+      2. Analyze potential side effects
+      3. Consider project-specific factors
+      4. Suggest alternatives if dangerous
+      5. Explain reasoning
+
+    deep: |
+      For complex cases (1500-3000 tokens):
+      1. Multi-step reasoning
+      2. Simulate execution mentally
+      3. Consider edge cases
+      4. Evaluate risk/benefit
+      5. Provide detailed explanation
+      6. Generate safer alternatives
+
+  decision_framework:
+    inputs:
+      - command_text: "The actual command"
+      - context: "Surrounding documentation"
+      - project_type: "Node.js, Python, Rust, etc."
+      - user_intent: "What are they trying to do?"
+      - history: "Similar commands seen before"
+
+    outputs:
+      - category: "safe | conditional | dangerous"
+      - confidence: "0.0 - 1.0"
+      - reasoning: "Why this category?"
+      - risks: "What could go wrong?"
+      - alternatives: "Safer ways to do this"
+      - execution_plan: "If running, how?"
+
+  learning:
+    description: |
+      After analysis, extract rules for future use:
+
+      1. If confident decision → Save as deterministic rule
+      2. Add to command-verify's pattern library
+      3. Next time, no LLM needed (0 tokens)
+
+      Example:
+      First time seeing "pnpm install":
+        - Sub-agent analyzes (1000 tokens)
+        - Categorizes as "conditional" (like npm install)
+        - Extracts rule: "pnpm install → conditional"
+        - Saves rule
+
+      Next time seeing "pnpm install":
+        - command-verify checks rules (0 tokens)
+        - Matches saved rule
+        - No sub-agent needed!
+
+# Prompt template for LLM analysis
+prompt_template: |
+  You are a command safety analyzer. Analyze this command and determine if it's safe to execute.
+
+  Command: {command}
+
+  Context:
+  - Found in: {file}:{line}
+  - Surrounding text: {context}
+  - Project type: {project_type}
+  - Git branch: {branch}
+
+  Previous similar commands:
+  {similar_commands}
+
+  Analyze:
+  1. What does this command do?
+  2. What files/resources does it affect?
+  3. What are the risks?
+  4. Is it safe to auto-execute?
+
+  Provide:
+  - Category: safe | conditional | dangerous
+  - Confidence: 0-100%
+  - Reasoning: Brief explanation
+  - Risks: What could go wrong
+  - Alternatives: Safer options (if dangerous)
+
+  Format as JSON:
+  {
+    "category": "...",
+    "confidence": 0.95,
+    "reasoning": "...",
+    "risks": ["..."],
+    "alternatives": ["..."]
+  }
+
+# Token optimization strategies
+optimization:
+  caching:
+    description: "Cache LLM analysis results"
+    strategy: |
+      1. Hash command + context
+      2. Check if analyzed before
+      3. If yes, return cached result (0 tokens)
+      4. If no, run analysis, save result
+
+    hit_rate_target: ">90% after initial learning"
+
+  batching:
+    description: "Analyze multiple commands together"
+    strategy: |
+      Instead of:
+        Command 1 → LLM call (1000 tokens)
+        Command 2 → LLM call (1000 tokens)
+        Total: 2000 tokens
+
+      Do:
+        Commands 1-2 → Single LLM call (1500 tokens)
+        Total: 1500 tokens (25% savings)
+
+  progressive_disclosure:
+    description: "Only analyze what's needed"
+    strategy: |
+      1. Quick pattern match (0 tokens)
+      2. If uncertain, quick LLM check (500 tokens)
+      3. Only if still uncertain, deep analysis (1500 tokens)
+
+# Integration with parent skill
+integration:
+  handoff:
+    from_parent: |
+      command-verify skill:
+      1. Discovers command: "weird-cli --flag"
+      2. Tries to categorize (deterministic)
+      3. Confidence low (<80%)
+      4. Hands off to command-analyzer sub-agent
+
+      Sub-agent:
+      1. Receives command + context
+      2. Runs LLM analysis
+      3. Returns decision + confidence
+      4. Saves rule for future
+
+      command-verify skill:
+      1. Receives decision
+      2. Continues validation
+      3. Updates cache
+
+  feedback_loop:
+    description: |
+      Sub-agent learns from outcomes:
+
+      1. Sub-agent says "safe" → User runs it → Fails
+      2. User reports failure
+      3. Sub-agent updates model:
+         - Increases caution for similar patterns
+         - Adds to dangerous patterns list
+         - Adjusts confidence calibration
+
+      4. Next similar command → More conservative
+
+# Cost management
+cost_control:
+  budget:
+    per_validation: "max 10,000 tokens"
+    per_command: "max 3,000 tokens"
+    monthly: "max 100,000 tokens"
+
+  alerts:
+    - threshold: "50,000 tokens/month"
+      action: "Warn user about high usage"
+    - threshold: "80,000 tokens/month"
+      action: "Suggest reviewing patterns"
+    - threshold: "100,000 tokens/month"
+      action: "Pause sub-agent, use deterministic only"
+
+  fallback:
+    description: "If budget exceeded, fall back to conservative rules"
+    strategy: |
+      1. Unknown command → Mark as "conditional"
+      2. Ask user for classification
+      3. Save user's decision as rule
+      4. Continue without LLM
+
+# Examples of sub-agent analysis
+
+example_1:
+  command: "curl https://example.com/install.sh | bash"
+  context: "Installation instructions in README.md"
+
+  analysis:
+    category: "dangerous"
+    confidence: 0.98
+    reasoning: |
+      This command downloads a script from the internet and immediately
+      executes it without inspection. This is a common attack vector.
+
+    risks:
+      - "Script could be malicious"
+      - "Script could be compromised"
+      - "No way to review before execution"
+      - "Runs with current user permissions"
+
+    alternatives:
+      - "curl -O install.sh && less install.sh && bash install.sh"
+      - "Use official package manager if available"
+      - "Download, verify signature, then run"
+
+    rule_extracted:
+      pattern: "curl .* \\| bash"
+      category: "dangerous"
+      reason: "Blind execution of downloaded script"
+
+example_2:
+  command: "npm run build:production"
+  context: "Deployment documentation"
+
+  analysis:
+    category: "safe"
+    confidence: 0.92
+    reasoning: |
+      This runs a npm script defined in package.json. The :production
+      suffix suggests environment-specific build. Build commands are
+      typically safe as they only generate files.
+
+    risks:
+      - "May take long time"
+      - "May require specific Node version"
+      - "May fail if dependencies not installed"
+
+    alternatives: []
+
+    rule_extracted:
+      pattern: "npm run build:.*"
+      category: "safe"
+      reason: "Build script variant"
+
+example_3:
+  command: "docker-compose up -d"
+  context: "Development setup guide"
+
+  analysis:
+    category: "conditional"
+    confidence: 0.85
+    reasoning: |
+      Starts Docker containers in detached mode. Safe in development,
+      but should confirm as it:
+      - Consumes system resources
+      - May expose ports
+      - May create volumes
+
+    risks:
+      - "Consumes CPU/memory"
+      - "May conflict with running containers"
+      - "May require sudo depending on setup"
+
+    alternatives:
+      - "docker-compose up (foreground, easier to stop)"
+      - "Review docker-compose.yml first"
+
+    rule_extracted:
+      pattern: "docker-compose up"
+      category: "conditional"
+      reason: "Starts containers, ask for confirmation"
+
+# Performance characteristics
+performance:
+  analysis_time:
+    quick: "~1-2 seconds"
+    medium: "~2-5 seconds"
+    deep: "~5-10 seconds"
+
+  token_usage:
+    average_per_command: "1200 tokens"
+    with_context: "1800 tokens"
+    with_alternatives: "2500 tokens"
+
+  accuracy:
+    target: ">95%"
+    measurement: "User satisfaction with categorization"
+
+# Success metrics
+metrics:
+  invocation_rate:
+    target: "<10% of commands"
+    description: "Most commands handled deterministically"
+
+  learning_rate:
+    target: "90% reduction in repeat analyses"
+    description: "Extract rules to avoid future LLM calls"
+
+  accuracy:
+    target: ">95%"
+    description: "Correct safety categorization"
+
+  token_efficiency:
+    target: "<5000 tokens per validation session"
+    description: "Batch processing and caching"
+
+---

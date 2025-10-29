@@ -1,0 +1,11 @@
+{
+  "command": "- run: npm ci",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:04.678Z",
+  "commit": null
+}

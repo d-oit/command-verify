@@ -1,0 +1,11 @@
+{
+  "command": "- **When to use:** Before releases, to ensure commands work",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:02.107Z",
+  "commit": null
+}

@@ -1,0 +1,11 @@
+{
+  "command": "npm run clean:cache",
+  "category": "dangerous",
+  "confidence": 0.95,
+  "validated": true,
+  "success": true,
+  "duration": 0,
+  "message": "Categorized as dangerous",
+  "validatedAt": "2025-10-29T07:34:03.382Z",
+  "commit": null
+}

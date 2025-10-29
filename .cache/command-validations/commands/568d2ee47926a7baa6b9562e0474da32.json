@@ -1,0 +1,11 @@
+{
+  "command": "- **Token Usage:** 0 tokens",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:01.588Z",
+  "commit": null
+}

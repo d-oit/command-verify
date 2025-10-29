@@ -1,0 +1,11 @@
+{
+  "command": "npm run test",
+  "category": "safe",
+  "confidence": 0.95,
+  "validated": true,
+  "success": true,
+  "duration": 0,
+  "message": "Categorized as safe",
+  "validatedAt": "2025-10-29T07:34:02.974Z",
+  "commit": null
+}

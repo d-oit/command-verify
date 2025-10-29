@@ -1,0 +1,392 @@
+---
+name: command-verify
+description: |
+  Intelligent command verification for documentation. Discovers all commands
+  in markdown files, validates them using git diff-based cache invalidation,
+  and ensures documentation accuracy with zero token cost after initial setup.
+version: 1.0.0
+
+# What this skill can do
+capabilities:
+  - command-discovery
+  - documentation-validation
+  - git-aware-caching
+  - intelligent-invalidation
+  - zero-token-operation
+
+# Trigger patterns - when should Claude invoke this skill?
+triggers:
+  - pattern: "verify (all )?commands?"
+    description: "Validate all commands in documentation"
+
+  - pattern: "check documentation commands?"
+    description: "Check if documented commands are valid"
+
+  - pattern: "validate (the )?docs?"
+    description: "Validate documentation"
+
+  - pattern: "find (all )?commands in (markdown|md|docs?)"
+    description: "Discover commands in markdown files"
+
+  - pattern: "what commands? (are|were) (changed|affected|updated)"
+    description: "Show which commands need revalidation"
+
+# How to use this skill
+usage_examples:
+  - query: "verify all commands"
+    action: "Full validation of all commands in markdown files"
+
+  - query: "check documentation commands"
+    action: "Validate commands, using cache when possible"
+
+  - query: "what commands were affected by recent changes?"
+    action: "Show which commands need revalidation based on git diff"
+
+  - query: "find all commands in docs"
+    action: "Discover and list all commands without validation"
+
+# Core behavior and intelligence
+behavior:
+  discovery:
+    description: |
+      Intelligently discovers ALL commands across ALL markdown files in the codebase.
+
+      Supports multiple formats:
+      - Code blocks: ```bash, ```shell, ```console, ```sh
+      - Inline code: `npm run build`
+      - Multiple command types: npm, python, cargo, docker, git, etc.
+
+      Tracks:
+      - Exact command text
+      - All file locations where command appears
+      - Line numbers for precise error reporting
+      - Command type (code-block vs inline)
+
+    patterns:
+      - "**/*.md"
+      - "!node_modules/**"
+      - "!.git/**"
+      - "!dist/**"
+      - "!build/**"
+
+  cache_strategy:
+    description: |
+      Git diff-based intelligent cache invalidation. Zero LLM tokens after initial run.
+
+      Core principle: Only revalidate commands when relevant files change.
+
+      Strategy:
+      1. On first run: Validate all commands, save current git commit
+      2. On subsequent runs:
+         - Get git diff since last validation
+         - Analyze which commands are affected
+         - Revalidate only affected commands
+         - Keep cached results for unchanged commands
+
+      Invalidation rules:
+      - **.md changed → Revalidate commands in that file
+      - package.json changed → Revalidate ALL npm commands
+      - tsconfig.json changed → Revalidate build/typecheck commands
+      - src/** changed → Revalidate test commands
+      - Cargo.toml changed → Revalidate cargo commands
+      - requirements.txt changed → Revalidate pip commands
+
+      Cache hit rate: 90%+ after first run
+      Token usage: 0 (pure git + file operations)
+
+  validation:
+    description: |
+      Smart command categorization and validation.
+
+      Categories:
+      1. SAFE - Auto-validate, no risk
+         - npm run build, test, lint, typecheck
+         - git status, git log
+         - Read-only operations (ls, cat, find)
+
+      2. CONDITIONAL - Ask before running
+         - npm install (modifies node_modules)
+         - npm run format (modifies source)
+         - Commands with side effects
+
+      3. DANGEROUS - Never auto-run
+         - rm -rf
+         - git push --force
+         - npm run clean/clear
+         - Database drops
+         - Any --force or --delete flags
+
+      For each command, track:
+      - Validation status (success/fail/skipped)
+      - Execution time
+      - Error messages
+      - All locations in documentation
+
+    safety_first: true
+    never_execute_dangerous: true
+
+  reporting:
+    description: |
+      Clear, actionable reports showing:
+      - Total commands discovered
+      - Cache hit rate (% reused from cache)
+      - Commands validated this run
+      - Commands skipped (dangerous)
+      - Commands failed (need fixing)
+      - Token usage (always 0)
+      - Time saved vs full validation
+
+      Progressive output during execution:
+      - Phase 1: Discovery (show count as found)
+      - Phase 2: Cache analysis (show git diff)
+      - Phase 3: Validation (show progress)
+      - Phase 4: Summary (show metrics)
+
+# Storage structure
+cache:
+  location: .cache/command-validations
+
+  structure:
+    last_validation_commit: |
+      .cache/command-validations/last-validation-commit.txt
+      Contains: git commit hash of last validation
+      Purpose: Compare with HEAD to get diff
+
+    command_caches: |
+      .cache/command-validations/commands/*.json
+      One file per unique command
+      Filename: command text hashed (e.g., npm-run-build.json)
+
+      Format:
+      {
+        "command": "npm run build",
+        "locations": [
+          {"file": "README.md", "line": 45, "type": "code-block"},
+          {"file": "docs/guide.md", "line": 23, "type": "inline"}
+        ],
+        "validation": {
+          "validated": true,
+          "category": "safe",
+          "success": true,
+          "duration": 2341,
+          "message": "Build completed successfully"
+        },
+        "cachedAt": "2025-10-29T10:00:00Z",
+        "commit": "a1b2c3d4e5f6"
+      }
+
+  git_friendly: true
+  human_readable: true
+  no_database_needed: true
+
+# Dependencies and requirements
+dependencies:
+  required:
+    - git: "For diff-based cache invalidation"
+    - node: "For running the verification script"
+
+  npm_packages:
+    - glob: "For finding markdown files"
+
+  optional:
+    - none: "Completely self-contained"
+
+# Integration points
+integrations:
+  ci_cd:
+    github_actions: |
+      - Run on PR with .md changes
+      - Run before releases
+      - Fail PR if commands invalid
+
+    pre_commit_hooks: |
+      - Validate before committing .md changes
+      - Fast due to caching (< 1 second)
+
+  package_json:
+    scripts:
+      verify: "node scripts/verify-commands.js"
+      verify_force: "rm -rf .cache/command-validations && npm run verify"
+      prerelease: "npm run verify"
+      prepush: "npm run verify"
+
+# Plugin integration (if extended)
+plugins:
+  potential_extensions:
+    - name: command-executor
+      description: "Actually run safe commands and capture output"
+
+    - name: doc-updater
+      description: "Auto-update docs when commands change"
+
+    - name: command-suggester
+      description: "Suggest commands based on project structure"
+
+# Sub-agent integration (if needed)
+sub_agents:
+  command_analyzer:
+    description: |
+      Specialized agent for deep command analysis.
+      Only invoked for complex or ambiguous commands.
+
+    triggers:
+      - "Command has unusual syntax"
+      - "Never seen this command before"
+      - "Conflicting validation results"
+
+    capabilities:
+      - "Parse complex shell scripts"
+      - "Understand command flags and options"
+      - "Suggest safer alternatives"
+      - "Explain what command does"
+
+  git_historian:
+    description: |
+      Analyzes git history to understand command evolution.
+      Helps predict if changes are breaking.
+
+    triggers:
+      - "High churn in command definitions"
+      - "Many failed validations recently"
+
+    capabilities:
+      - "Track command changes over time"
+      - "Identify command deprecations"
+      - "Suggest migration paths"
+
+# Performance characteristics
+performance:
+  first_run:
+    discovery: "~100ms for 10 .md files"
+    validation: "~5-10s for 20 commands"
+    total: "~10-15 seconds"
+    tokens: "0 tokens (deterministic)"
+
+  subsequent_runs_no_changes:
+    discovery: "~100ms"
+    cache_check: "~50ms (git diff)"
+    validation: "0ms (all cached)"
+    total: "~150ms"
+    tokens: "0 tokens"
+    cache_hit_rate: "100%"
+
+  subsequent_runs_with_changes:
+    discovery: "~100ms"
+    cache_check: "~50ms"
+    validation: "~2s for 3 affected commands"
+    total: "~2.5 seconds"
+    tokens: "0 tokens"
+    cache_hit_rate: "85%"
+
+# Quality metrics
+metrics:
+  accuracy:
+    target: ">95%"
+    measurement: "Commands correctly categorized"
+
+  cache_efficiency:
+    target: ">90% cache hit rate"
+    measurement: "Commands reused from cache"
+
+  token_efficiency:
+    target: "0 tokens per run"
+    measurement: "LLM API calls made"
+
+  performance:
+    target: "<5s for typical validation"
+    measurement: "End-to-end execution time"
+
+# Error handling
+error_handling:
+  not_a_git_repo:
+    action: "Warn and treat as first run (validate all)"
+    graceful: true
+
+  command_execution_fails:
+    action: "Log failure, continue with other commands"
+    report: true
+
+  malformed_cache:
+    action: "Ignore corrupted cache entry, revalidate"
+    self_healing: true
+
+  missing_dependencies:
+    action: "Clear error message with installation instructions"
+    helpful: true
+
+# Self-improvement
+learning:
+  discovers:
+    - "Common command patterns in your codebase"
+    - "Which files affect which commands"
+    - "Command success rate over time"
+    - "Optimal cache invalidation rules"
+
+  adapts:
+    - "Cache TTL based on command stability"
+    - "Invalidation rules based on project structure"
+    - "Validation speed based on command complexity"
+
+  suggests:
+    - "Documentation improvements"
+    - "Outdated commands"
+    - "Missing commands in docs"
+    - "Dangerous commands that should be documented as such"
+
+# Usage in Claude Code
+invocation:
+  natural_language: |
+    User: "Verify all the commands in our documentation"
+
+    Claude Code:
+    1. Recognizes trigger pattern "verify all commands"
+    2. Invokes command-verify skill
+    3. Skill runs verification
+    4. Returns structured report
+    5. Claude presents results in natural language
+
+  explicit: |
+    User: "Use the command-verify skill"
+
+    Claude Code:
+    1. Explicitly invokes skill
+    2. Follows skill behavior definitions
+    3. Uses cache strategy
+    4. Reports results
+
+# Success criteria
+success_criteria:
+  - all_commands_found: "Discovers every command in every .md file"
+  - accurate_categorization: "Correctly identifies safe/conditional/dangerous"
+  - cache_works: "Git diff correctly identifies affected commands"
+  - zero_tokens: "No LLM API calls after initial setup"
+  - fast: "Completes in seconds, not minutes"
+  - reliable: "Same results for same state"
+  - helpful: "Clear reports that guide action"
+
+# Known limitations
+limitations:
+  - requires_git: "Won't work without git (falls back to full validation)"
+  - no_execution: "Only validates structure, doesn't execute commands"
+  - heuristic_detection: "May miss unusual command formats"
+  - static_rules: "Invalidation rules are predefined, not learned"
+
+# Future enhancements
+roadmap:
+  v1_1:
+    - "Command execution for safe commands"
+    - "Capture and store actual output"
+    - "Compare output against expected results"
+
+  v1_2:
+    - "Auto-fix common documentation issues"
+    - "Suggest missing commands"
+    - "Generate command documentation"
+
+  v2_0:
+    - "LLM-assisted command analysis (optional)"
+    - "Semantic similarity for invalidation"
+    - "Cross-repository learning"
+    - "Team-shared cache"
+
+---

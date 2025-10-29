@@ -1,0 +1,11 @@
+{
+  "command": "- **Purpose:** Actually run safe commands and capture output",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:01.951Z",
+  "commit": null
+}

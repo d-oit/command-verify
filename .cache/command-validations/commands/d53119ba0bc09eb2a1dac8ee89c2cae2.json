@@ -1,0 +1,11 @@
+{
+  "command": "npm install",
+  "category": "conditional",
+  "confidence": 0.9,
+  "validated": true,
+  "success": true,
+  "duration": 0,
+  "message": "Categorized as conditional",
+  "validatedAt": "2025-10-29T07:34:01.087Z",
+  "commit": null
+}

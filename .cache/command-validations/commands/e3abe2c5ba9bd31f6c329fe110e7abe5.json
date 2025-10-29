@@ -1,0 +1,11 @@
+{
+  "command": "npm run dev",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:03.558Z",
+  "commit": null
+}

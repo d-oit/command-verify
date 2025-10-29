@@ -1,0 +1,11 @@
+{
+  "command": "- **Purpose:** Core validation logic",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:01.501Z",
+  "commit": null
+}

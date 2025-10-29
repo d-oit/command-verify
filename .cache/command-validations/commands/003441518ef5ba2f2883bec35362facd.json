@@ -1,0 +1,11 @@
+{
+  "command": "Cache hit rate: 91.3% (21/23 from cache)",
+  "category": "unknown",
+  "confidence": 0.5,
+  "validated": true,
+  "success": false,
+  "duration": 0,
+  "message": "Unknown command pattern",
+  "validatedAt": "2025-10-29T07:34:03.862Z",
+  "commit": null
+}
