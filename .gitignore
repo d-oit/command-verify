@@ -114,3 +114,4 @@ Thumbs.db
 
 # Keep the checkpoint file in git (optional)
 !.cache/command-validations/last-validation-commit.txt
+nul

@@ -11,6 +11,7 @@ Intelligent command verification for documentation. Discovers all commands in ma
 ✅ **Fast** - < 1s for typical runs with cache
 ✅ **Complete** - Finds every command in every .md file
 
+✅ **Cross-platform** - Works on Windows, macOS, and Linux with platform-aware command detection
 ## Quick Start
 
 1. **Install dependencies:**
@@ -23,10 +24,186 @@ Intelligent command verification for documentation. Discovers all commands in ma
    npm run verify
    ```
 
-3. **Force full validation:**
+3. **View detailed statistics:**
+   ```bash
+   npm run verify:stats
+   ```
+
+4. **Force full validation:**
    ```bash
    npm run verify:force
    ```
+
+## Slash Commands
+
+When using this skill in Claude Code, you have access to these slash commands:
+
+### `/verify`
+Verify all commands in markdown documentation with intelligent caching.
+
+**What it does:**
+- Discovers all commands in markdown files
+- Uses git diff-based cache invalidation
+- Only revalidates commands affected by recent changes
+- Provides cache hit rate statistics
+
+**Example output:**
+```
+✓ Discovered 23 unique commands
+✓ Cache hit rate: 91.3% (21/23 from cache)
+✓ Validated 2 new/changed commands
+```
+
+### `/verify-force`
+Force full command verification, bypassing the cache entirely.
+
+**What it does:**
+- Clears the validation cache
+- Revalidates ALL commands from scratch
+- Useful for debugging or after major changes
+- Establishes fresh baseline
+
+**Use when:**
+- Cache may be corrupted or stale
+- After bulk documentation updates
+- Debugging cache invalidation issues
+- Need to verify validation logic changes
+
+### `/verify-stats`
+Show detailed verification statistics and cache performance metrics.
+
+**What it provides:**
+- **Cache Performance:** Hit rates, last validation commit, cache size
+- **Command Distribution:** Breakdown by category (safe/conditional/dangerous)
+- **System Availability:** Which commands are installed vs unavailable
+- **Invalidation Analysis:** Files changed, commands affected by changes
+
+**Example insights:**
+```
+Cache Performance:
+- 46 cached commands
+- 95.7% hit rate
+- Cache size: 42KB
+
+Command Distribution:
+- Safe: 32 (69.6%)
+- Conditional: 10 (21.7%)
+- Dangerous: 4 (8.7%)
+```
+
+## Self-Learning Memory System
+
+The skill includes an auto-updating knowledge base that learns from corrections and adapts to your project.
+
+### How It Works
+
+When you tell Claude about a mistake, it:
+1. **Learns** - Updates `.claude/knowledge.json` with the correction
+2. **Applies** - Fixes all affected files automatically
+3. **Remembers** - Uses the correction in future verifications
+
+### Example: Implicit Memory Request
+
+```
+You: "claude-code is wrong, it should just be claude"
+
+Claude:
+✓ Learned: CLI name is "claude" not "claude-code"
+✓ Updated knowledge base
+✓ Fixed 2 references in README.md
+✓ Added to learning log
+```
+
+### What Gets Learned
+
+**CLI Name Corrections:**
+- Wrong command names → Correct names
+- Automatically applied to all documentation
+
+**Command Patterns:**
+- New command types discovered in your project
+- Custom validation rules
+- Project-specific safety categories
+
+**File Invalidation Rules:**
+- Which file changes should trigger revalidation
+- Learned from patterns in your workflow
+
+### Knowledge Base Location
+
+`.claude/knowledge.json` - A simple JSON file that stores:
+- Corrections learned from user feedback
+- Project-specific command patterns
+- Custom validation rules
+- Learning history with timestamps
+
+### Generic & Portable
+
+This system works **everywhere**, not just in Claude Code:
+- Plain JSON format (no proprietary formats)
+- Can be copied to any project
+- No external dependencies
+- Auto-updates based on user corrections
+- Human-readable and editable
+
+### Manual Updates
+
+You can also edit `.claude/knowledge.json` directly to teach the skill:
+
+```json
+{
+  "corrections": {
+    "cliNames": {
+      "old-cli-name": {
+        "correct": "new-cli-name",
+        "reason": "Project renamed the CLI"
+      }
+    }
+  },
+  "patterns": {
+    "commandPrefixes": ["npm", "git", "your-custom-cli"]
+  },
+  "validationRules": {
+    "skip": {
+      "patterns": ["^/my-slash-command$"],
+      "reason": "Documentation examples that aren't real system commands"
+    },
+    "safe": {
+      "patterns": ["^my-cli run test$"],
+      "exactMatches": []
+    }
+  }
+}
+```
+
+### Integration with verify-commands.js
+
+The knowledge base is **automatically loaded** by the verification script:
+
+1. **At startup**: Loads `.claude/knowledge.json`
+2. **During validation**: Checks knowledge base BEFORE hardcoded patterns
+3. **Priority**: Knowledge base rules take precedence over defaults
+4. **Merge strategy**: Supplements hardcoded patterns, doesn't replace them
+
+**Categories:**
+- `safe` - Commands that can be auto-executed
+- `conditional` - Commands that need user confirmation
+- `dangerous` - Commands that should never auto-execute
+- `skip` - Documentation examples (not real commands)
+
+**Result:**
+```
+🧠 Loaded knowledge base from .claude/knowledge.json
+
+📋 Command breakdown:
+   ✓ 13 safe commands
+   ⚠️  11 conditional commands
+   ⊝ 3 dangerous commands
+   ❓ 2 unknown commands
+   ⏭️  6 skipped (documentation examples)
+```
+
+Skipped commands (like `/verify`, `claude-code`, `drop database`) are recognized as documentation examples and excluded from "not available" warnings.
 
 ## Architecture
 
@@ -104,13 +281,13 @@ Time: 1.2s
 ### With Execution (Plugin)
 ```bash
 # This would invoke the command-executor plugin
-claude-code "verify and execute safe commands"
+claude "verify and execute safe commands"
 ```
 
 ### Deep Analysis (Sub-Agent)
 ```bash
 # This might invoke command-analyzer for ambiguous commands
-claude-code "verify commands and explain any ambiguous ones"
+claude "verify commands and explain any ambiguous ones"
 ```
 
 ## Command Discovery
@@ -198,6 +375,7 @@ npx husky add .husky/pre-push "npm run verify"
   "scripts": {
     "verify": "node scripts/verify-commands.js",
     "verify:force": "node scripts/verify-commands.js --force",
+    "verify:stats": "node scripts/verify-commands.js --stats",
     "prerelease": "npm run verify",
     "prepush": "npm run verify"
   }
@@ -313,12 +491,17 @@ npm run verify
 ```
 project/
 ├── .claude/
+│   ├── commands/                   # Slash commands
+│   │   ├── verify.md               # /verify command
+│   │   ├── verify-force.md         # /verify-force command
+│   │   └── verify-stats.md         # /verify-stats command
 │   ├── skills/
 │   │   └── command-verify.yml      # Core skill
 │   ├── plugins/
 │   │   └── command-executor.yml    # Execution plugin
-│   └── agents/
-│       └── command-analyzer.yml    # Analysis sub-agent
+│   ├── agents/
+│   │   └── command-analyzer.yml    # Analysis sub-agent
+│   └── knowledge.json              # 🧠 Self-learning knowledge base
 │
 ├── scripts/
 │   └── verify-commands.js          # Main implementation

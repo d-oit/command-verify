@@ -1,11 +1,12 @@
 {
   "command": "npx husky install",
-  "category": "unknown",
-  "confidence": 0.5,
+  "category": "conditional",
+  "confidence": 0.9,
   "validated": true,
-  "success": false,
+  "available": true,
+  "success": true,
   "duration": 0,
-  "message": "Unknown command pattern",
-  "validatedAt": "2025-10-29T11:11:15.380Z",
-  "commit": "317455bddab10f146d75ad0a7be385d5fb9b9acb"
+  "message": "Categorized as conditional, available on system",
+  "validatedAt": "2025-10-29T15:17:30.390Z",
+  "commit": "0d92abe81ef0b17a5ae56a035bc38561a02ddd2c"
 }

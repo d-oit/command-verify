@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Auto-updating knowledge base for command-verify skill. This file is automatically updated when corrections or new patterns are learned. Merged with hardcoded patterns in verify-commands.js - this file takes precedence.",
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-29T00:00:00Z",
+
+  "corrections": {
+    "description": "Command name corrections learned from user feedback",
+    "cliNames": {
+      "claude-code": {
+        "correct": "claude",
+        "reason": "The CLI is called 'claude' not 'claude-code'",
+        "learnedFrom": "user-correction",
+        "date": "2025-10-29"
+      }
+    }
+  },
+
+  "patterns": {
+    "description": "Command prefixes to recognize. Supplements COMMON_COMMAND_PREFIXES in verify-commands.js",
+    "commandPrefixes": [
+      "claude",
+      "/verify",
+      "/verify-force",
+      "/verify-stats"
+    ],
+    "excludeFromVerification": {
+      "description": "Commands that should be skipped during verification",
+      "patterns": [
+        "^\\$ ",
+        "^# ",
+        "documentation example",
+        "\\.\\.\\."
+      ],
+      "exactMatches": [
+        "cd command-verify",
+        "command-executor"
+      ]
+    }
+  },
+
+  "validationRules": {
+    "description": "Custom validation rules that supplement/override the hardcoded patterns in verify-commands.js. Patterns are checked BEFORE hardcoded rules, allowing overrides.",
+
+    "safe": {
+      "description": "Safe commands - auto-validate, no risk. These supplement the hardcoded safe patterns.",
+      "patterns": [
+        "^npm run verify.*$",
+        "^npm run clean:cache$",
+        "^claude --version$",
+        "^claude --help$"
+      ],
+      "exactMatches": []
+    },
+
+    "conditional": {
+      "description": "Conditional commands - ask before running. These supplement the hardcoded conditional patterns.",
+      "patterns": [],
+      "exactMatches": []
+    },
+
+    "dangerous": {
+      "description": "Dangerous commands - never auto-execute. These supplement the hardcoded dangerous patterns.",
+      "patterns": [],
+      "exactMatches": []
+    },
+
+    "skip": {
+      "description": "Commands to skip validation entirely - they're documentation examples, not real commands",
+      "patterns": [
+        "^claude-code",
+        "^/verify$",
+        "^/verify-force$",
+        "^/verify-stats$",
+        "^cd command-verify$",
+        "^command-executor$",
+        "^drop database$"
+      ],
+      "exactMatches": [],
+      "reason": "These are slash commands or documentation examples that don't exist as system commands"
+    }
+  },
+
+  "filePatterns": {
+    "description": "Which file changes should trigger revalidation of which commands. Used by analyzeImpact() in verify-commands.js",
+    "rules": [
+      {
+        "filePattern": "package.json",
+        "invalidates": ["npm", "yarn", "pnpm", "node", "npx"],
+        "reason": "Package changes affect Node.js commands"
+      },
+      {
+        "filePattern": "*.md",
+        "invalidates": ["commands-in-same-file"],
+        "reason": "Markdown changes only affect commands in that file"
+      },
+      {
+        "filePattern": ".claude/**",
+        "invalidates": ["claude", "/verify*"],
+        "reason": "Claude configuration changes affect CLI behavior"
+      },
+      {
+        "filePattern": ".claude/knowledge.json",
+        "invalidates": ["*"],
+        "reason": "Knowledge base changes affect all command validation"
+      }
+    ]
+  },
+
+  "learningLog": {
+    "description": "History of corrections and updates to this knowledge base",
+    "entries": [
+      {
+        "date": "2025-10-29",
+        "type": "correction",
+        "from": "claude-code",
+        "to": "claude",
+        "context": "User corrected CLI name in README",
+        "appliedTo": ["README.md"]
+      },
+      {
+        "date": "2025-10-29",
+        "type": "integration",
+        "context": "Combined with existing verify-commands.js hardcoded patterns",
+        "changes": [
+          "Added skip category for documentation-only commands",
+          "Added .claude/knowledge.json to invalidation rules",
+          "Structured validation rules to match script's pattern/exactMatch approach"
+        ]
+      }
+    ]
+  },
+
+  "metadata": {
+    "autoUpdate": true,
+    "updateTriggers": [
+      "user-correction",
+      "validation-error-pattern",
+      "new-command-type-discovered"
+    ],
+    "mergeStrategy": {
+      "description": "How this knowledge base merges with hardcoded patterns in verify-commands.js",
+      "priority": "knowledge.json takes precedence over hardcoded patterns",
+      "approach": "Check knowledge.json first, then fall back to hardcoded patterns",
+      "updating": "When user provides corrections, update knowledge.json and apply to docs"
+    },
+    "genericApproach": {
+      "description": "This knowledge base works everywhere, not just in Claude Code",
+      "portability": "Can be copied to any project",
+      "updateMethod": "Auto-updates when skill learns corrections",
+      "storageFormat": "Simple JSON, no proprietary formats",
+      "integration": "Works alongside existing validation logic, supplements it"
+    }
+  }
+}

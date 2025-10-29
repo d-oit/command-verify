@@ -1,11 +1,12 @@
 {
   "command": "npm run verify",
-  "category": "unknown",
-  "confidence": 0.5,
+  "category": "safe",
+  "confidence": 0.95,
   "validated": true,
-  "success": false,
+  "available": true,
+  "success": true,
   "duration": 0,
-  "message": "Unknown command pattern",
-  "validatedAt": "2025-10-29T11:11:14.359Z",
-  "commit": "317455bddab10f146d75ad0a7be385d5fb9b9acb"
+  "message": "Categorized as safe, available on system",
+  "validatedAt": "2025-10-29T15:17:28.736Z",
+  "commit": "0d92abe81ef0b17a5ae56a035bc38561a02ddd2c"
 }

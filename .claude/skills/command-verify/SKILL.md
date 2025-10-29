@@ -120,15 +120,76 @@ Smart command categorization and validation:
 }
 ```
 
+## Self-Learning Memory System
+
+This skill uses an auto-updating knowledge base at `.claude/knowledge.json` that learns from corrections and user feedback.
+
+### When to Update Knowledge Base
+
+**Implicit memory requests** - Auto-detect when user is correcting or teaching:
+- "X is wrong, it should be Y"
+- "The CLI is called X not Y"
+- "That command doesn't exist, use Z instead"
+- "Always check X before running Y"
+
+**Update triggers:**
+1. User provides a correction about command names
+2. Validation discovers a new command pattern
+3. User teaches a project-specific rule
+4. Repeated validation errors suggest a pattern
+
+### How to Update
+
+When user provides a correction:
+
+1. **Read** `.claude/knowledge.json`
+2. **Update** the relevant section:
+   - `corrections.cliNames` - For CLI name fixes
+   - `patterns.commandPrefixes` - For new command types
+   - `validationRules` - For safety categorization
+   - `filePatterns.rules` - For invalidation rules
+3. **Append** to `learningLog.entries` with timestamp and context
+4. **Write** updated knowledge back to file
+5. **Apply** the correction to affected files (README, docs, etc.)
+
+### Knowledge Base Structure
+
+```json
+{
+  "corrections": {
+    "cliNames": {"wrong-name": {"correct": "right-name", "reason": "..."}}
+  },
+  "patterns": {
+    "commandPrefixes": ["npm", "git", "claude"]
+  },
+  "validationRules": {
+    "safe": [...], "conditional": [...], "dangerous": [...]
+  },
+  "learningLog": {
+    "entries": [{"date": "...", "type": "correction", "from": "...", "to": "..."}]
+  }
+}
+```
+
 ## Instructions for Claude
 
 When this skill is invoked:
+
+0. **Memory Check Phase** (ALWAYS RUN FIRST)
+   - Read `.claude/knowledge.json` to load learned corrections
+   - Apply any CLI name corrections from `corrections.cliNames`
+   - Use custom patterns from `patterns.commandPrefixes`
+   - If user provides correction (e.g., "X is wrong, use Y"):
+     - Update knowledge.json immediately
+     - Apply correction to all affected files
+     - Log the learning in learningLog
 
 1. **Discovery Phase**
    - Use the Glob tool to find all `**/*.md` files (excluding node_modules, .git, dist, build)
    - Use the Read tool to read each markdown file
    - Extract all commands from code blocks and inline code
    - Track command text, file locations, and line numbers
+   - Check commands against learned corrections in knowledge.json
 
 2. **Cache Analysis Phase**
    - Check if `.cache/command-validations/last-validation-commit.txt` exists

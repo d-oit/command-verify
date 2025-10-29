@@ -20,6 +20,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = '.cache/command-validations';
 const COMMANDS_CACHE_DIR = path.join(CACHE_DIR, 'commands');
 const LAST_COMMIT_FILE = path.join(CACHE_DIR, 'last-validation-commit.txt');
+const KNOWLEDGE_BASE_FILE = '.claude/knowledge.json';
+
+// Global knowledge base (loaded at startup)
+let knowledgeBase = null;
 
 // Command patterns for discovery
 const COMMAND_PATTERNS = {
@@ -33,8 +37,9 @@ const COMMAND_PATTERNS = {
   genericCodeBlock: /^\s*```\s*$([\s\S]*?)^```$/gm,
 };
 
-// Known command prefixes (for filtering)
-const COMMAND_PREFIXES = [
+// Common command prefixes - used as hints, not requirements
+// The system will also detect commands generically by pattern
+const COMMON_COMMAND_PREFIXES = [
   'npm', 'yarn', 'pnpm', 'node', 'npx',
   'python', 'python3', 'pip', 'pip3',
   'cargo', 'rustc', 'rustup',
@@ -46,6 +51,8 @@ const COMMAND_PREFIXES = [
   'mkdir', 'rm', 'cp', 'mv',
   'echo', 'printf',
   'cd', 'pwd',
+  // NOTE: Don't hardcode specific tools like "claude-code"
+  // The system detects them generically
 ];
 
 /**
@@ -56,15 +63,54 @@ function looksLikeCommand(text) {
 
   const trimmed = text.trim();
 
-  // Check for command prefixes
-  if (COMMAND_PREFIXES.some(prefix => trimmed.startsWith(prefix + ' ') || trimmed === prefix)) {
+  // Filter out obvious non-commands
+  if (trimmed.startsWith('-')) return false; // Markdown list items
+  if (trimmed.startsWith('*')) return false; // Markdown list items
+  if (trimmed.startsWith('#')) return false; // Markdown headers or comments
+  if (trimmed.startsWith('>')) return false; // Markdown quotes
+  if (trimmed.startsWith('//')) return false; // Code comments
+  if (/^[0-9]+\./.test(trimmed)) return false; // Numbered lists
+  if (/:\s*[0-9]/.test(trimmed)) return false; // Text with statistics (e.g., "rate: 91.3%")
+  if (/[A-Z][a-z]+:/.test(trimmed)) return false; // Prose with colons (e.g., "Summary:")
+  if (trimmed.endsWith(':')) return false; // Text ending with colon (prose)
+  if (trimmed.includes('...')) return false; // Ellipsis indicates prose
+  if (trimmed.match(/\b(the|a|an|is|are|was|were|be|been|being)\b/i)) return false; // Common English words
+  if (trimmed.length > 100) return false; // Commands are typically shorter
+
+  // Filter out file paths and URLs
+  if (trimmed.includes('.md') || trimmed.includes('.json') || trimmed.includes('.js') || trimmed.includes('.ts')) return false;
+  if (trimmed.startsWith('.')) return false; // Hidden folders like .claude/
+  if (trimmed.includes('<') || trimmed.includes('>')) return false; // HTML/XML tags or placeholders
+  if (trimmed.match(/^\[.*\]$/)) return false; // Array literals in code
+  if (trimmed.includes(' = ')) return false; // Variable assignments
+
+  // Filter out dates and version strings
+  if (/^\d{4}.*Q[1-4]/.test(trimmed)) return false; // Dates like "2025 Q3"
+  if (/^v\d+\.\d+/.test(trimmed)) return false; // Version strings like "v0.4.0"
+
+  // Filter out code snippets
+  if (trimmed.startsWith('const ') || trimmed.startsWith('let ') || trimmed.startsWith('var ')) return false;
+  if (trimmed.startsWith('function ') || trimmed.startsWith('class ')) return false;
+
+  // Check for known command prefixes as a hint
+  if (COMMON_COMMAND_PREFIXES.some(prefix => trimmed.startsWith(prefix + ' ') || trimmed === prefix)) {
     return true;
   }
 
   // Check for common command patterns
   if (/^(sudo|su)\s+/.test(trimmed)) return true;
-  if (/^[a-zA-Z0-9_-]+\s+/.test(trimmed)) return true; // Simple command
-  if (/^[./]/.test(trimmed)) return true; // Relative paths
+  if (/^[./]/.test(trimmed)) return true; // Relative paths like ./script.sh
+
+  // Detect hyphenated CLI tools (common pattern: word-word, e.g., any-tool-name)
+  // Matches patterns like: tool-name, word-word, etc.
+  if (/^[a-z]+(-[a-z]+)+(\s|$)/.test(trimmed)) return true;
+
+  // Allow simple command patterns that look like actual commands
+  // Must start with lowercase word, followed by space and args
+  // No commas or parentheses (which suggest prose)
+  if (/^[a-z][a-z0-9_-]*\s+/.test(trimmed) && !trimmed.includes(',') && !trimmed.includes('(')) {
+    return true;
+  }
 
   return false;
 }
@@ -350,16 +396,100 @@ async function saveCommandCache(command, data) {
 }
 
 /**
+ * Load knowledge base from .claude/knowledge.json
+ */
+async function loadKnowledgeBase() {
+  try {
+    const content = await fs.readFile(KNOWLEDGE_BASE_FILE, 'utf-8');
+    return JSON.parse(content);
+  } catch (error) {
+    // Knowledge base doesn't exist or is invalid - use hardcoded patterns only
+    return null;
+  }
+}
+
+/**
+ * Check if command should be skipped (documentation example, not a real command)
+ */
+function shouldSkipCommand(cmd, knowledge) {
+  if (!knowledge?.validationRules?.skip) return false;
+
+  const { patterns = [], exactMatches = [] } = knowledge.validationRules.skip;
+
+  // Check exact matches first
+  if (exactMatches.includes(cmd)) return true;
+
+  // Check patterns
+  for (const pattern of patterns) {
+    try {
+      if (new RegExp(pattern).test(cmd)) return true;
+    } catch (e) {
+      // Invalid regex, skip
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check knowledge base for command categorization
+ * Returns: { category: string, confidence: number } or null if not found
+ */
+function checkKnowledgeBase(cmd, knowledge) {
+  if (!knowledge?.validationRules) return null;
+
+  const categories = ['dangerous', 'safe', 'conditional']; // Check dangerous first
+
+  for (const category of categories) {
+    const rules = knowledge.validationRules[category];
+    if (!rules) continue;
+
+    const { patterns = [], exactMatches = [] } = rules;
+
+    // Check exact matches first
+    if (exactMatches.includes(cmd)) {
+      return { category, confidence: 1.0 };
+    }
+
+    // Check patterns
+    for (const pattern of patterns) {
+      try {
+        if (new RegExp(pattern).test(cmd)) {
+          return { category, confidence: 0.95 };
+        }
+      } catch (e) {
+        // Invalid regex, skip
+      }
+    }
+  }
+
+  return null; // Not found in knowledge base
+}
+
+/**
  * Categorize command safety
  */
 function categorizeCommand(command) {
   const cmd = command.command || command;
 
+  // Check if this command should be skipped entirely
+  if (knowledgeBase && shouldSkipCommand(cmd, knowledgeBase)) {
+    return { category: 'skip', confidence: 1.0 };
+  }
+
+  // Check knowledge base first (takes precedence over hardcoded patterns)
+  if (knowledgeBase) {
+    const kbResult = checkKnowledgeBase(cmd, knowledgeBase);
+    if (kbResult) return kbResult;
+  }
+
+  // Fall back to hardcoded patterns
   // Dangerous commands - never execute
   const dangerous = [
     /rm\s+-rf/,
     /git push.*--force/,
     /npm run.*(?:clean|clear|reset)/,
+    /npm run.*:(?:force|clean|clear|reset)/,  // Force operations via npm scripts
     /drop database/,
     /truncate/,
     /delete.*--force/,
@@ -379,23 +509,33 @@ function categorizeCommand(command) {
     /docker build/,
     /docker run.*-p/,
     /git commit/,
-    /git push/,
+    /git push(?!.*--force)/,  // git push without --force
+    /git add/,
+    /git init/,
+    /git clone/,
+    /git checkout -b/,
     /npm run format/,
-    /prettier.*--write/
+    /prettier.*--write/,
+    /npx husky/,  // Git hooks modification
+    /npx rimraf/  // Cross-platform rm -rf
   ];
 
   // Safe commands - auto-execute
   const safe = [
-    /^npm run (build|test|lint|typecheck)$/,
-    /^yarn (build|test|lint|typecheck)$/,
-    /^pnpm (build|test|lint|typecheck)$/,
+    /^npm run (build|test|lint|typecheck|dev|verify)$/,
+    /^yarn (build|test|lint|typecheck|dev)$/,
+    /^pnpm (build|test|lint|typecheck|dev)$/,
     /^cargo (build|test|check)$/,
     /^go (build|test|vet)$/,
-    /^git (status|log|diff|show)$/,
+    /^git (status|log|diff|show|branch)$/,
+    /^git diff/,  // Git diff with args is also safe (read-only)
     /^docker ps$/,
     /^docker images$/,
     /^node --version$/,
     /^python --version$/,
+    /^npm --version$/,
+    /^git --version$/,
+    /^cd /,  // Change directory (safe to execute)
     /^ls/,
     /^cat/,
     /^find/,
@@ -430,22 +570,55 @@ function categorizeCommand(command) {
 }
 
 /**
- * Validate a command (structure check only)
+ * Test if a command is available on the system
+ * Returns { available: boolean, error: string|null }
+ */
+async function testCommandAvailability(command) {
+  const cmd = command.command || command;
+
+  // Extract just the command name (first word)
+  const commandName = cmd.split(/\s+/)[0];
+
+  // Test using 'which' (Unix) or 'where' (Windows)
+  const testCmd = process.platform === 'win32' ? 'where' : 'which';
+
+  try {
+    execSync(`${testCmd} ${commandName}`, {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      timeout: 2000  // 2 second timeout
+    });
+    return { available: true, error: null };
+  } catch (error) {
+    return {
+      available: false,
+      error: `Command '${commandName}' not found on system`
+    };
+  }
+}
+
+/**
+ * Validate a command (categorize + test availability)
  */
 async function validateCommand(command) {
   const categorization = categorizeCommand(command);
 
-  // For now, just structure validation
+  // Test if command is available on the system
+  const availability = await testCommandAvailability(command);
+
   const result = {
     command: command.command || command,
     category: categorization.category,
     confidence: categorization.confidence,
     validated: true,
-    success: categorization.category !== 'unknown',
+    available: availability.available,  // NEW: Is it on this system?
+    success: categorization.category !== 'unknown' && availability.available,
     duration: 0,
-    message: categorization.category === 'unknown' ?
-      'Unknown command pattern' :
-      `Categorized as ${categorization.category}`,
+    message: !availability.available ?
+      availability.error :
+      (categorization.category === 'unknown' ?
+        'Unknown command pattern but available on system' :
+        `Categorized as ${categorization.category}, available on system`),
     validatedAt: new Date().toISOString(),
     commit: getCurrentCommit()
   };
@@ -501,6 +674,11 @@ function generateSummary(commands, results, startTime, changedFiles) {
   const conditional = results.filter(r => r.validation.category === 'conditional').length;
   const dangerous = results.filter(r => r.validation.category === 'dangerous').length;
   const unknown = results.filter(r => r.validation.category === 'unknown').length;
+  const skipped = results.filter(r => r.validation.category === 'skip').length;
+
+  // NEW: Track system availability
+  const available = results.filter(r => r.validation.available === true).length;
+  const notAvailable = results.filter(r => r.validation.available === false).length;
 
   const duration = Date.now() - startTime;
 
@@ -523,6 +701,25 @@ function generateSummary(commands, results, startTime, changedFiles) {
   console.log(`   ⚠️  ${conditional} conditional commands`);
   console.log(`   ⊝ ${dangerous} dangerous commands`);
   console.log(`   ❓ ${unknown} unknown commands`);
+  if (skipped > 0) {
+    console.log(`   ⏭️  ${skipped} skipped (documentation examples)`);
+  }
+
+  console.log('\n🖥️  System availability:');
+  console.log(`   ✓ ${available} commands available on this system`);
+  console.log(`   ✗ ${notAvailable} commands NOT available`);
+
+  // List commands not available (excluding skipped documentation examples)
+  const notAvailableReal = results.filter(r =>
+    r.validation.available === false && r.validation.category !== 'skip'
+  );
+
+  if (notAvailableReal.length > 0) {
+    console.log('\n⚠️  Commands not found on system:');
+    for (const result of notAvailableReal) {
+      console.log(`   ✗ ${result.command}`);
+    }
+  }
 
   // Save last commit
   const currentCommit = getCurrentCommit();
@@ -539,6 +736,12 @@ async function main() {
 
   console.log('🚀 Universal Command Verifier\n');
   console.log('============================================================\n');
+
+  // Phase 0: Load knowledge base
+  knowledgeBase = await loadKnowledgeBase();
+  if (knowledgeBase) {
+    console.log('🧠 Loaded knowledge base from .claude/knowledge.json\n');
+  }
 
   // Phase 1: Discovery
   console.log('📚 PHASE 1: Command Discovery');
@@ -583,5 +786,8 @@ if (process.argv.includes('--force')) {
   console.log('🧹 Force mode: clearing cache...');
   await fs.rm(CACHE_DIR, { recursive: true, force: true });
 }
+
+// Note: --stats flag is supported and runs the same flow as default
+// (main() already outputs comprehensive statistics)
 
 main().catch(console.error);

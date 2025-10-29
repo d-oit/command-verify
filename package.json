@@ -10,6 +10,7 @@
   "scripts": {
     "verify": "node scripts/verify-commands.js",
     "verify:force": "node scripts/verify-commands.js --force",
+    "verify:stats": "node scripts/verify-commands.js --stats",
     "prerelease": "npm run verify",
     "prepush": "npm run verify",
     "clean:cache": "rm -rf .cache/command-validations",

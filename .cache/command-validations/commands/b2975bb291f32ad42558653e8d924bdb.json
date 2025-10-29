@@ -3,9 +3,10 @@
   "category": "safe",
   "confidence": 0.95,
   "validated": true,
+  "available": true,
   "success": true,
   "duration": 0,
-  "message": "Categorized as safe",
-  "validatedAt": "2025-10-29T11:11:15.294Z",
-  "commit": "317455bddab10f146d75ad0a7be385d5fb9b9acb"
+  "message": "Categorized as safe, available on system",
+  "validatedAt": "2025-10-29T15:17:29.997Z",
+  "commit": "0d92abe81ef0b17a5ae56a035bc38561a02ddd2c"
 }
