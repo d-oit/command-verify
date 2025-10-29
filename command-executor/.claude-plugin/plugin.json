@@ -1,0 +1,8 @@
+{
+  "name": "command-executor",
+  "description": "Executes safe commands and captures output to extend command-verify functionality",
+  "version": "1.0.0",
+  "author": {
+    "name": "d.o."
+  }
+}

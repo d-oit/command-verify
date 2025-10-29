@@ -1,6 +1,6 @@
 {
   "name": "command-verify",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Intelligent command verification for documentation with git diff-based cache invalidation",
   "type": "module",
   "main": "scripts/verify-commands.js",
@@ -22,7 +22,7 @@
     "cache",
     "validation"
   ],
-  "author": "Claude Code",
+  "author": "d.o.",
   "license": "MIT",
   "dependencies": {
     "glob": "^10.3.10"

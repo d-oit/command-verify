@@ -1,0 +1,89 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form below to help us understand and reproduce the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: What went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior. Be as specific as possible.
+      placeholder: |
+        1. Run command 'npm run verify'
+        2. Modify a .md file
+        3. Run verification again
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: The verification should complete successfully and show updated results.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: The command failed with error message X.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Please provide details about your environment.
+      value: |
+        - OS: [e.g., Windows 11]
+        - Node.js version: [e.g., 18.17.0]
+        - NPM version: [e.g., 9.6.7]
+        - Git version: [e.g., 2.41.0]
+        - Command Verify version: [e.g., 1.0.0]
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here, such as error logs, screenshots, or links to related issues.
+      placeholder: |
+        Error logs:
+        ```
+        [paste error output here]
+        ```
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched for existing issues that describe this bug
+          required: true
+        - label: I have checked the README and documentation for relevant information
+          required: true
+        - label: I have tried the latest version of the software
+          required: false
+        - label: I have provided all the information requested above
+          required: true

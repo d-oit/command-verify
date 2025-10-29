@@ -369,11 +369,3 @@ For issues:
 ## License
 
 MIT - See package.json for details
-
----
-
-**Total setup time: ~15 minutes**
-**Total cost: ~$0.21/year**
-**Ongoing maintenance: ~0 minutes**
-
-This system keeps your documentation accurate with minimal effort and cost."test change"  
