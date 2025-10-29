@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(gemini-search:web-search-patterns)",
+      "Bash(npm run verify:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
