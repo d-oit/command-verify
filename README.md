@@ -382,40 +382,6 @@ npx husky add .husky/pre-push "npm run verify"
 }
 ```
 
-## Cost Analysis
-
-### Base System (Skill Only)
-- **Per validation:** $0.00
-- **Per year:** $0.00
-- **Coverage:** 90%
-
-### With Sub-Agent (Intelligence Layer)
-- **First month:** ~$0.10 (learning phase)
-- **Ongoing:** ~$0.01/month (new commands only)
-- **Per year:** ~$0.21
-- **Coverage:** 99%
-
-### With Plugin (Execution Layer)
-- **Additional cost:** $0.00
-- **High confidence:** Commands actually work
-
-## Performance Benchmarks
-
-### First Run (Cold Start)
-- 50 commands across 10 .md files
-- Discovery: ~200ms
-- Validation: ~5s
-- **Total: ~5.2s**
-- **Tokens: 0**
-
-### Subsequent Runs (Warm Cache)
-- Discovery: ~200ms
-- Cache check: ~50ms
-- Validation: ~1s (only affected)
-- **Total: ~1.25s**
-- **Tokens: 0**
-- **Cache hit rate: 94-96%**
-
 ## Configuration
 
 ### Customize Command Detection
