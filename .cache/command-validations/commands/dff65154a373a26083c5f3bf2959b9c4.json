@@ -3,10 +3,10 @@
   "category": "safe",
   "confidence": 0.95,
   "validated": true,
-  "available": false,
-  "success": false,
+  "available": true,
+  "success": true,
   "duration": 0,
-  "message": "Command 'ls' not found on system",
-  "validatedAt": "2025-10-29T15:17:31.099Z",
-  "commit": "0d92abe81ef0b17a5ae56a035bc38561a02ddd2c"
+  "message": "Categorized as safe, available on system",
+  "validatedAt": "2025-10-30T07:41:35.309Z",
+  "commit": "f8ea33bc93b262598cb2209602257ad8d521abc8"
 }

@@ -91,6 +91,70 @@ Command Distribution:
 - Dangerous: 4 (8.7%)
 ```
 
+## Plugin Installation & Distribution
+
+The command-executor plugin can be installed and distributed through Claude Code's marketplace system.
+
+### Installing from Marketplace
+
+If this repository is added as a marketplace, you can install the command-executor plugin:
+
+```bash
+# Add the marketplace (one-time setup)
+/plugin marketplace add https://codeberg.org/d-oit/markdown-command-verifier
+
+# Install the plugin
+/plugin install command-executor
+
+# List available plugins
+/plugin marketplace list
+```
+
+### Installing from Local Directory
+
+For development or when working within this repository:
+
+```bash
+# The plugin is already available in ./command-executor/
+# Claude Code will auto-detect it if the repository is trusted
+```
+
+### Manual Installation
+
+Copy the plugin directory to your Claude Code plugins location:
+
+```bash
+# Copy to personal plugins directory
+cp -r command-executor ~/.claude/plugins/
+
+# Or to project plugins
+cp -r command-executor .claude/plugins/
+```
+
+### Team Distribution
+
+To automatically install for team members, add to `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": [
+    "https://codeberg.org/d-oit/markdown-command-verifier"
+  ]
+}
+```
+
+When team members trust the repository folder, plugins from configured marketplaces will be available automatically.
+
+### Verifying Installation
+
+Check if the plugin is loaded:
+
+```bash
+/plugin list
+```
+
+You should see `command-executor` in the list of installed plugins.
+
 ## Self-Learning Memory System
 
 The skill includes an auto-updating knowledge base that learns from corrections and adapts to your project.
@@ -209,23 +273,30 @@ Skipped commands (like `/verify`, `claude-code`, `drop database`) are recognized
 
 ### Core Components
 
-#### 1. Skill: command-verify (Base System)
-- **Purpose:** Core validation logic
+#### 1. Project Skill: command-verify (Base System)
+- **Type:** Project Skill (`.claude/skills/command-verify/SKILL.md`)
+- **Purpose:** Core validation logic for discovering and validating commands
 - **Token Usage:** 0 tokens
 - **Coverage:** 90% of commands
 - **When to use:** Always, for documentation verification
+- **Availability:** Automatically available to all team members
 
-#### 2. Plugin: command-executor (Optional Execution)
+#### 2. Distributable Plugin: command-executor (Optional Execution)
+- **Type:** Claude Code Plugin (`command-executor/.claude-plugin/plugin.json`)
 - **Purpose:** Actually run safe commands and capture output
 - **Token Usage:** 0 tokens
 - **Coverage:** 100% (with confirmation)
 - **When to use:** Before releases, to ensure commands work
+- **Distribution:** Can be shared via marketplace or direct installation
+- **Components:** Includes the `command-executor` skill
 
 #### 3. Sub-Agent: command-analyzer (Optional Intelligence)
-- **Purpose:** Deep analysis for ambiguous commands
+- **Type:** Agent (`.claude/agents/command-analyzer.md`)
+- **Purpose:** Deep analysis for ambiguous commands using LLM reasoning
 - **Token Usage:** ~1,200 tokens per analysis
 - **Coverage:** 99% of commands
-- **When to use:** When deterministic rules aren't enough
+- **When to use:** Invoked automatically by command-verify when deterministic rules aren't sufficient
+- **Model:** Uses Haiku for cost-efficient analysis
 
 ### How They Work Together
 
@@ -461,16 +532,30 @@ project/
 │   │   ├── verify.md               # /verify command
 │   │   ├── verify-force.md         # /verify-force command
 │   │   └── verify-stats.md         # /verify-stats command
+│   ├── skills/                     # Project skills
+│   │   ├── command-verify/
+│   │   │   └── SKILL.md            # Core verification skill
+│   │   └── test-skill/
+│   │       └── SKILL.md            # Test/demo skill
+│   ├── agents/                     # Sub-agents
+│   │   └── command-analyzer.md     # LLM-based command analyzer
+│   ├── plugins/                    # Plugin references (if any)
+│   ├── knowledge.json              # 🧠 Self-learning knowledge base
+│   └── settings.local.json         # Local settings & permissions
+│
+├── .claude-plugin/                 # Marketplace distribution
+│   └── marketplace.json            # Plugin marketplace catalog
+│
+├── command-executor/               # Distributable plugin
+│   ├── .claude-plugin/
+│   │   └── plugin.json             # Plugin manifest
 │   ├── skills/
-│   │   └── command-verify.yml      # Core skill
-│   ├── plugins/
-│   │   └── command-executor.yml    # Execution plugin
-│   ├── agents/
-│   │   └── command-analyzer.yml    # Analysis sub-agent
-│   └── knowledge.json              # 🧠 Self-learning knowledge base
+│   │   └── command-executor/
+│   │       └── SKILL.md            # Execution skill
+│   └── README.md                   # Plugin documentation
 │
 ├── scripts/
-│   └── verify-commands.js          # Main implementation
+│   └── verify-commands.js          # Main verification implementation
 │
 ├── .cache/
 │   └── command-validations/

@@ -3,11 +3,11 @@
 /**
  * Claude Code Standards Validator
  *
- * Validates the command-verify skill against Claude Code documentation standards:
+ * Validates the command-verify project against official Claude Code documentation standards:
  * - https://docs.claude.com/en/docs/claude-code/skills
- * - https://docs.claude.com/en/docs/claude-code/plugins
- * - https://docs.claude.com/en/docs/claude-code/sub-agents
- * - https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices
+ * - https://docs.claude.com/en/docs/claude-code/plugin-marketplaces
+ *
+ * Updated for current standards (SKILL.md format, plugin.json, marketplace.json)
  */
 
 import fs from 'fs/promises';
@@ -49,16 +49,30 @@ class ClaudeStandardsValidator {
     }
   }
 
-  async validateYAMLStructure(filePath, requiredFields, description) {
+  async validateMarkdownYAMLFrontmatter(filePath, requiredFields, description) {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      const yamlContent = content;
 
+      // Check for YAML frontmatter delimiters
+      if (!content.startsWith('---')) {
+        this.log(`${description}: Missing YAML frontmatter start delimiter`, 'error');
+        return false;
+      }
+
+      const endDelimiterIndex = content.indexOf('---', 3);
+      if (endDelimiterIndex === -1) {
+        this.log(`${description}: Missing YAML frontmatter end delimiter`, 'error');
+        return false;
+      }
+
+      const frontmatter = content.substring(0, endDelimiterIndex + 3);
+
+      // Check for required fields
       for (const field of requiredFields) {
-        if (!yamlContent.includes(`${field}:`)) {
+        if (!frontmatter.includes(`${field}:`)) {
           this.log(`${description}: Missing required field '${field}'`, 'error');
         } else {
-          this.log(`${description}: Field '${field}' present`, 'success');
+          this.log(`${description}: Has required field '${field}'`, 'success');
         }
       }
 
@@ -69,198 +83,251 @@ class ClaudeStandardsValidator {
     }
   }
 
+  async validateJSONFile(filePath, requiredFields, description) {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const json = JSON.parse(content);
+
+      this.log(`${description}: Valid JSON structure`, 'success');
+
+      // Check for required fields
+      for (const field of requiredFields) {
+        if (!(field in json)) {
+          this.log(`${description}: Missing required field '${field}'`, 'error');
+        } else {
+          this.log(`${description}: Has field '${field}'`, 'success');
+        }
+      }
+
+      return json;
+    } catch (error) {
+      this.log(`${description}: Failed to validate - ${error.message}`, 'error');
+      return null;
+    }
+  }
+
   async validateSkillStandards() {
-    console.log('\n🔍 Validating Skill Standards (.claude/skills/command-verify.yml)');
-    console.log('================================================================\n');
+    console.log('\n🔍 Validating Project Skills (.claude/skills/)');
+    console.log('==============================================\n');
 
-    const skillPath = '.claude/skills/command-verify.yml';
-
-    // Required files
-    await this.validateFileExists(skillPath, 'Skill definition file');
-
-    // Required YAML structure
-    const requiredSkillFields = [
-      'name',
-      'description',
-      'version',
-      'capabilities',
-      'triggers',
-      'behavior',
-      'cache',
-      'dependencies'
+    const skills = [
+      { path: '.claude/skills/command-verify/SKILL.md', name: 'command-verify' },
+      { path: '.claude/skills/test-skill/SKILL.md', name: 'test-skill' }
     ];
 
-    await this.validateYAMLStructure(skillPath, requiredSkillFields, 'Skill YAML structure');
+    for (const skill of skills) {
+      const exists = await this.validateFileExists(skill.path, `Skill: ${skill.name}`);
 
-    // Check specific skill standards
-    try {
-      const content = await fs.readFile(skillPath, 'utf-8');
+      if (exists) {
+        // Validate SKILL.md format
+        const requiredFields = ['name', 'description'];
+        const optionalFields = ['allowed-tools'];
 
-      // Check for trigger patterns
-      if (!content.includes('triggers:')) {
-        this.log('Skill: Missing triggers section', 'error');
-      } else if (!content.includes('pattern:')) {
-        this.log('Skill: Missing trigger patterns', 'error');
-      } else {
-        this.log('Skill: Has trigger patterns', 'success');
+        await this.validateMarkdownYAMLFrontmatter(
+          skill.path,
+          requiredFields,
+          `Skill ${skill.name}`
+        );
+
+        // Read and validate content
+        try {
+          const content = await fs.readFile(skill.path, 'utf-8');
+
+          // Check for lowercase hyphenated name
+          if (content.includes(`name: ${skill.name}`)) {
+            this.log(`Skill ${skill.name}: Uses correct kebab-case naming`, 'success');
+          } else {
+            this.log(`Skill ${skill.name}: Name should be kebab-case`, 'warning');
+          }
+
+          // Check description includes when to use
+          if (content.includes('Use when') || content.includes('when asked to')) {
+            this.log(`Skill ${skill.name}: Description includes usage context`, 'success');
+          } else {
+            this.log(`Skill ${skill.name}: Description should include when to use it`, 'warning');
+          }
+
+          // Check for allowed-tools if present
+          if (content.includes('allowed-tools:')) {
+            this.log(`Skill ${skill.name}: Has tool restrictions defined`, 'success');
+          }
+
+          // Check for supporting documentation
+          if (content.includes('## Overview') || content.includes('## Instructions')) {
+            this.log(`Skill ${skill.name}: Has supporting documentation`, 'success');
+          } else {
+            this.log(`Skill ${skill.name}: Should have detailed instructions`, 'warning');
+          }
+
+        } catch (error) {
+          this.log(`Skill ${skill.name}: Content validation failed - ${error.message}`, 'error');
+        }
       }
-
-      // Check for capabilities
-      if (!content.includes('capabilities:')) {
-        this.log('Skill: Missing capabilities section', 'error');
-      } else {
-        this.log('Skill: Has capabilities section', 'success');
-      }
-
-      // Check for behavior section
-      if (!content.includes('behavior:')) {
-        this.log('Skill: Missing behavior section', 'error');
-      } else {
-        this.log('Skill: Has behavior section', 'success');
-      }
-
-      // Check for cache strategy
-      if (!content.includes('cache:')) {
-        this.log('Skill: Missing cache configuration', 'error');
-      } else {
-        this.log('Skill: Has cache configuration', 'success');
-      }
-
-      // Check for usage examples
-      if (!content.includes('usage_examples:')) {
-        this.log('Skill: Missing usage examples', 'warning');
-      } else {
-        this.log('Skill: Has usage examples', 'success');
-      }
-
-      // Check for success criteria
-      if (!content.includes('success_criteria:')) {
-        this.log('Skill: Missing success criteria', 'warning');
-      } else {
-        this.log('Skill: Has success criteria', 'success');
-      }
-
-    } catch (error) {
-      this.log(`Skill validation failed: ${error.message}`, 'error');
     }
   }
 
   async validatePluginStandards() {
-    console.log('\n🔌 Validating Plugin Standards (.claude/plugins/command-executor.yml)');
-    console.log('======================================================================\n');
+    console.log('\n🔌 Validating Plugin (command-executor/.claude-plugin/)');
+    console.log('====================================================\n');
 
-    const pluginPath = '.claude/plugins/command-executor.yml';
+    const pluginJsonPath = 'command-executor/.claude-plugin/plugin.json';
+    const exists = await this.validateFileExists(pluginJsonPath, 'Plugin manifest');
 
-    // Required files
-    await this.validateFileExists(pluginPath, 'Plugin definition file');
+    if (exists) {
+      const requiredFields = ['name', 'description', 'version', 'author'];
+      const recommendedFields = ['homepage', 'repository', 'license', 'keywords', 'category', 'components'];
 
-    // Required YAML structure
-    const requiredPluginFields = [
-      'name',
-      'description',
-      'version',
-      'plugin_type',
-      'extends',
-      'config',
-      'triggers',
-      'capabilities'
-    ];
+      const json = await this.validateJSONFile(pluginJsonPath, requiredFields, 'Plugin manifest');
 
-    await this.validateYAMLStructure(pluginPath, requiredPluginFields, 'Plugin YAML structure');
+      if (json) {
+        // Check recommended fields
+        for (const field of recommendedFields) {
+          if (!(field in json)) {
+            this.log(`Plugin manifest: Missing recommended field '${field}'`, 'warning');
+          } else {
+            this.log(`Plugin manifest: Has recommended field '${field}'`, 'success');
+          }
+        }
 
-    // Check specific plugin standards
-    try {
-      const content = await fs.readFile(pluginPath, 'utf-8');
+        // Validate components structure
+        if (json.components && json.components.skills) {
+          this.log(`Plugin manifest: Declares skills: ${json.components.skills.join(', ')}`, 'success');
+        } else {
+          this.log(`Plugin manifest: Should declare bundled components`, 'warning');
+        }
 
-      // Check for plugin type
-      if (!content.includes('plugin_type:')) {
-        this.log('Plugin: Missing plugin_type', 'error');
-      } else {
-        this.log('Plugin: Has plugin_type', 'success');
+        // Validate plugin skill exists
+        const pluginSkillPath = 'command-executor/skills/command-executor/SKILL.md';
+        const skillExists = await this.validateFileExists(pluginSkillPath, 'Plugin skill');
+
+        if (skillExists) {
+          await this.validateMarkdownYAMLFrontmatter(
+            pluginSkillPath,
+            ['name', 'description'],
+            'Plugin skill'
+          );
+        }
       }
-
-      // Check for extends
-      if (!content.includes('extends:')) {
-        this.log('Plugin: Missing extends field', 'error');
-      } else {
-        this.log('Plugin: Has extends field', 'success');
-      }
-
-      // Check for config section
-      if (!content.includes('config:')) {
-        this.log('Plugin: Missing config section', 'error');
-      } else {
-        this.log('Plugin: Has config section', 'success');
-      }
-
-      // Check for safety features
-      if (!content.includes('safety:')) {
-        this.log('Plugin: Missing safety configuration', 'warning');
-      } else {
-        this.log('Plugin: Has safety configuration', 'success');
-      }
-
-    } catch (error) {
-      this.log(`Plugin validation failed: ${error.message}`, 'error');
     }
   }
 
-  async validateSubAgentStandards() {
-    console.log('\n🤖 Validating Sub-Agent Standards (.claude/agents/command-analyzer.yml)');
-    console.log('========================================================================\n');
+  async validateMarketplaceStandards() {
+    console.log('\n🏪 Validating Marketplace (.claude-plugin/marketplace.json)');
+    console.log('=======================================================\n');
 
-    const agentPath = '.claude/agents/command-analyzer.yml';
+    const marketplacePath = '.claude-plugin/marketplace.json';
+    const exists = await this.validateFileExists(marketplacePath, 'Marketplace catalog');
 
-    // Required files
-    await this.validateFileExists(agentPath, 'Sub-agent definition file');
+    if (exists) {
+      const requiredFields = ['name', 'owner', 'plugins'];
+      const json = await this.validateJSONFile(marketplacePath, requiredFields, 'Marketplace');
 
-    // Required YAML structure
-    const requiredAgentFields = [
-      'name',
-      'description',
-      'version',
-      'agent_type',
-      'parent',
-      'invocation_triggers',
-      'capabilities'
+      if (json) {
+        // Validate plugins array
+        if (!Array.isArray(json.plugins)) {
+          this.log('Marketplace: plugins field should be an array', 'error');
+        } else {
+          this.log(`Marketplace: Contains ${json.plugins.length} plugin(s)`, 'success');
+
+          // Validate each plugin entry
+          json.plugins.forEach((plugin, index) => {
+            const pluginRequiredFields = ['name', 'source', 'description', 'version'];
+
+            pluginRequiredFields.forEach(field => {
+              if (!(field in plugin)) {
+                this.log(`Marketplace plugin ${index + 1}: Missing '${field}'`, 'error');
+              } else {
+                this.log(`Marketplace plugin ${index + 1} (${plugin.name}): Has '${field}'`, 'success');
+              }
+            });
+
+            // Check source format
+            if (plugin.source) {
+              if (typeof plugin.source === 'string') {
+                this.log(`Marketplace plugin ${plugin.name}: Has relative path source`, 'success');
+              } else if (plugin.source.source && plugin.source.repo) {
+                this.log(`Marketplace plugin ${plugin.name}: Has GitHub source`, 'success');
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+
+  async validateAgentStandards() {
+    console.log('\n🤖 Validating Sub-Agent (.claude/agents/)');
+    console.log('========================================\n');
+
+    const agentPath = '.claude/agents/command-analyzer.md';
+    const exists = await this.validateFileExists(agentPath, 'Sub-agent definition');
+
+    if (exists) {
+      const requiredFields = ['name', 'description'];
+      const recommendedFields = ['tools', 'model'];
+
+      await this.validateMarkdownYAMLFrontmatter(agentPath, requiredFields, 'Sub-agent');
+
+      // Check content
+      try {
+        const content = await fs.readFile(agentPath, 'utf-8');
+
+        // Check for tools (not allowed-tools for agents)
+        if (content.includes('tools:')) {
+          this.log('Sub-agent: Has tools configuration', 'success');
+        } else {
+          this.log('Sub-agent: Should specify tools (not allowed-tools)', 'warning');
+        }
+
+        // Check for model specification
+        if (content.includes('model:')) {
+          this.log('Sub-agent: Specifies model for cost control', 'success');
+        } else {
+          this.log('Sub-agent: Should specify model (e.g., haiku for efficiency)', 'warning');
+        }
+
+        // Check for clear instructions
+        if (content.includes('## Your Role') || content.includes('## Instructions')) {
+          this.log('Sub-agent: Has clear instructions for autonomous operation', 'success');
+        }
+
+      } catch (error) {
+        this.log(`Sub-agent: Content validation failed - ${error.message}`, 'error');
+      }
+    }
+  }
+
+  async validateSlashCommands() {
+    console.log('\n⚡ Validating Slash Commands (.claude/commands/)');
+    console.log('==============================================\n');
+
+    const commands = [
+      'verify.md',
+      'verify-force.md',
+      'verify-stats.md'
     ];
 
-    await this.validateYAMLStructure(agentPath, requiredAgentFields, 'Sub-agent YAML structure');
+    for (const cmd of commands) {
+      const cmdPath = `.claude/commands/${cmd}`;
+      const exists = await this.validateFileExists(cmdPath, `Slash command: /${cmd.replace('.md', '')}`);
 
-    // Check specific sub-agent standards
-    try {
-      const content = await fs.readFile(agentPath, 'utf-8');
+      if (exists) {
+        await this.validateMarkdownYAMLFrontmatter(
+          cmdPath,
+          ['description'],
+          `Command ${cmd}`
+        );
 
-      // Check for agent type
-      if (!content.includes('agent_type:')) {
-        this.log('Sub-agent: Missing agent_type', 'error');
-      } else {
-        this.log('Sub-agent: Has agent_type', 'success');
+        // Check for allowed-tools if restricted
+        try {
+          const content = await fs.readFile(cmdPath, 'utf-8');
+          if (content.includes('allowed-tools:')) {
+            this.log(`Command ${cmd}: Has tool restrictions`, 'success');
+          }
+        } catch (error) {
+          this.log(`Command ${cmd}: Failed to read - ${error.message}`, 'error');
+        }
       }
-
-      // Check for parent skill
-      if (!content.includes('parent:')) {
-        this.log('Sub-agent: Missing parent field', 'error');
-      } else {
-        this.log('Sub-agent: Has parent field', 'success');
-      }
-
-      // Check for invocation triggers
-      if (!content.includes('invocation_triggers:')) {
-        this.log('Sub-agent: Missing invocation_triggers', 'error');
-      } else {
-        this.log('Sub-agent: Has invocation_triggers', 'success');
-      }
-
-      // Check for cost management
-      if (!content.includes('cost_control:')) {
-        this.log('Sub-agent: Missing cost management', 'warning');
-      } else {
-        this.log('Sub-agent: Has cost management', 'success');
-      }
-
-    } catch (error) {
-      this.log(`Sub-agent validation failed: ${error.message}`, 'error');
     }
   }
 
@@ -275,36 +342,26 @@ class ClaudeStandardsValidator {
     const packageExists = await this.validateFileExists('package.json', 'Package configuration');
 
     if (packageExists) {
-      try {
-        const packageContent = await fs.readFile('package.json', 'utf-8');
-        const packageJson = JSON.parse(packageContent);
+      const requiredFields = ['name', 'version', 'description', 'type', 'main', 'scripts'];
+      const json = await this.validateJSONFile('package.json', requiredFields, 'Package.json');
 
-        // Check for required fields
-        const requiredFields = ['name', 'version', 'description', 'type', 'main'];
-        for (const field of requiredFields) {
-          if (!packageJson[field]) {
-            this.log(`Package.json: Missing required field '${field}'`, 'error');
+      if (json) {
+        // Check for required scripts
+        const requiredScripts = ['verify', 'verify:force', 'verify:stats'];
+        requiredScripts.forEach(script => {
+          if (json.scripts && json.scripts[script]) {
+            this.log(`Package.json: Has '${script}' script`, 'success');
           } else {
-            this.log(`Package.json: Has '${field}'`, 'success');
+            this.log(`Package.json: Missing '${script}' script`, 'error');
           }
-        }
-
-        // Check for scripts
-        if (!packageJson.scripts || !packageJson.scripts.verify) {
-          this.log('Package.json: Missing verify script', 'error');
-        } else {
-          this.log('Package.json: Has verify script', 'success');
-        }
+        });
 
         // Check for dependencies
-        if (!packageJson.dependencies || !packageJson.dependencies.glob) {
-          this.log('Package.json: Missing glob dependency', 'warning');
-        } else {
+        if (json.dependencies && json.dependencies.glob) {
           this.log('Package.json: Has required dependencies', 'success');
+        } else {
+          this.log('Package.json: Missing glob dependency', 'warning');
         }
-
-      } catch (error) {
-        this.log(`Package.json validation failed: ${error.message}`, 'error');
       }
     }
   }
@@ -325,8 +382,10 @@ class ClaudeStandardsValidator {
           'Features',
           'Quick Start',
           'Usage Examples',
-          'Installation',
-          'Configuration'
+          'Architecture',
+          'Plugin Installation',
+          'Configuration',
+          'File Structure'
         ];
 
         for (const section of essentialSections) {
@@ -337,129 +396,98 @@ class ClaudeStandardsValidator {
           }
         }
 
+        // Check for installation instructions
+        if (readmeContent.includes('/plugin marketplace add') ||
+            readmeContent.includes('Installing from Marketplace')) {
+          this.log('README: Has plugin installation instructions', 'success');
+        }
+
       } catch (error) {
         this.log(`README validation failed: ${error.message}`, 'error');
       }
     }
 
     // Check for CONTRIBUTING
-    const contributingExists = await this.validateFileExists('CONTRIBUTING.md', 'Contributing guidelines');
-
-    if (contributingExists) {
-      this.log('Has CONTRIBUTING.md', 'success');
-    } else {
-      this.log('Missing CONTRIBUTING.md', 'warning');
-    }
+    await this.validateFileExists('CONTRIBUTING.md', 'Contributing guidelines');
 
     // Check for LICENSE
-    const licenseExists = await this.validateFileExists('LICENSE', 'License file');
-
-    if (licenseExists) {
-      this.log('Has LICENSE file', 'success');
-    } else {
-      this.log('Missing LICENSE file', 'warning');
-    }
-
-   
+    await this.validateFileExists('LICENSE', 'License file');
   }
 
-  async validateGitHubStandards() {
-    console.log('\n🐙 Validating GitHub Standards');
-    console.log('=============================\n');
+  async validateKnowledgeBase() {
+    console.log('\n🧠 Validating Knowledge Base');
+    console.log('===========================\n');
 
-    // Check for GitHub templates
-    const issueTemplateExists = await this.validateFileExists('.github/ISSUE_TEMPLATE/bug-report.yml', 'Bug report template');
-    const featureTemplateExists = await this.validateFileExists('.github/ISSUE_TEMPLATE/feature-request.yml', 'Feature request template');
-    const prTemplateExists = await this.validateFileExists('.github/PULL_REQUEST_TEMPLATE.md', 'PR template');
+    const knowledgePath = '.claude/knowledge.json';
+    const exists = await this.validateFileExists(knowledgePath, 'Knowledge base');
 
-    // Check for .gitignore
-    const gitignoreExists = await this.validateFileExists('.gitignore', 'Git ignore file');
-
-    if (gitignoreExists) {
+    if (exists) {
       try {
-        const gitignoreContent = await fs.readFile('.gitignore', 'utf-8');
+        const content = await fs.readFile(knowledgePath, 'utf-8');
+        const json = JSON.parse(content);
 
-        // Check for common ignores
-        const importantIgnores = [
-          'node_modules/',
-          '.cache/',
-          '*.log'
-        ];
+        this.log('Knowledge base: Valid JSON structure', 'success');
 
-        for (const ignore of importantIgnores) {
-          if (gitignoreContent.includes(ignore)) {
-            this.log(`Gitignore: Ignores '${ignore}'`, 'success');
-          } else {
-            this.log(`Gitignore: Should ignore '${ignore}'`, 'warning');
+        // Check for standard sections
+        const expectedSections = ['corrections', 'patterns', 'validationRules', 'learningLog'];
+
+        expectedSections.forEach(section => {
+          if (section in json) {
+            this.log(`Knowledge base: Has '${section}' section`, 'success');
           }
-        }
+        });
 
       } catch (error) {
-        this.log(`Gitignore validation failed: ${error.message}`, 'error');
+        this.log(`Knowledge base: Validation failed - ${error.message}`, 'error');
       }
     }
   }
 
-  async validateBestPractices() {
-    console.log('\n✨ Validating Best Practices');
+  async validateFileStructure() {
+    console.log('\n📁 Validating File Structure');
     console.log('===========================\n');
 
-    // Check skill naming conventions
-    const skillContent = await fs.readFile('.claude/skills/command-verify.yml', 'utf-8');
+    const expectedStructure = {
+      '.claude/commands/': 'Slash commands directory',
+      '.claude/skills/': 'Project skills directory',
+      '.claude/agents/': 'Sub-agents directory',
+      '.claude/knowledge.json': 'Self-learning knowledge base',
+      '.claude-plugin/marketplace.json': 'Marketplace catalog',
+      'command-executor/.claude-plugin/': 'Plugin directory',
+      'scripts/': 'Implementation scripts',
+      '.cache/': 'Validation cache'
+    };
 
-    // Check for kebab-case naming
-    if (skillContent.includes('name: command-verify')) {
-      this.log('Skill: Uses kebab-case naming', 'success');
-    } else {
-      this.log('Skill: Should use kebab-case naming', 'warning');
-    }
-
-    // Check for version field
-    if (skillContent.includes('version: ')) {
-      this.log('Skill: Has version field', 'success');
-    } else {
-      this.log('Skill: Missing version field', 'warning');
-    }
-
-    // Check for clear descriptions
-    if (skillContent.includes('description: |')) {
-      this.log('Skill: Has detailed description', 'success');
-    } else {
-      this.log('Skill: Should have detailed description', 'warning');
-    }
-
-    // Check plugin configuration
-    const pluginContent = await fs.readFile('.claude/plugins/command-executor.yml', 'utf-8');
-
-    // Check for safety defaults
-    if (pluginContent.includes('auto_execute: false')) {
-      this.log('Plugin: Has safe defaults (auto_execute: false)', 'success');
-    } else {
-      this.log('Plugin: Should have safe defaults', 'warning');
-    }
-
-    // Check sub-agent cost controls
-    const agentContent = await fs.readFile('.claude/agents/command-analyzer.yml', 'utf-8');
-
-    if (agentContent.includes('cost_control:')) {
-      this.log('Sub-agent: Has cost management', 'success');
-    } else {
-      this.log('Sub-agent: Should have cost management', 'warning');
+    for (const [path, description] of Object.entries(expectedStructure)) {
+      try {
+        await fs.access(path);
+        this.log(`${description}: ${path}`, 'success');
+      } catch {
+        if (path === '.cache/') {
+          this.log(`${description}: ${path} (created on first run)`, 'info');
+        } else {
+          this.log(`${description}: Missing ${path}`, 'error');
+        }
+      }
     }
   }
 
   async runValidation() {
     console.log('🚀 Claude Code Standards Validator');
     console.log('==================================\n');
+    console.log('Validating against official Claude Code documentation');
+    console.log('Updated for current standards (SKILL.md, plugin.json, marketplace.json)\n');
 
     try {
       await this.validateSkillStandards();
       await this.validatePluginStandards();
-      await this.validateSubAgentStandards();
+      await this.validateMarketplaceStandards();
+      await this.validateAgentStandards();
+      await this.validateSlashCommands();
       await this.validateImplementationStandards();
       await this.validateDocumentationStandards();
-      await this.validateGitHubStandards();
-      await this.validateBestPractices();
+      await this.validateKnowledgeBase();
+      await this.validateFileStructure();
 
       // Summary
       console.log('\n📊 Validation Summary');
@@ -474,22 +502,35 @@ class ClaudeStandardsValidator {
         this.errors.forEach(error => console.log(`   - ${error}`));
       }
 
-      if (this.warnings.length > 0) {
+      if (this.warnings.length > 0 && this.warnings.length <= 10) {
         console.log('\n⚠️  Warnings to consider:');
         this.warnings.forEach(warning => console.log(`   - ${warning}`));
+      } else if (this.warnings.length > 10) {
+        console.log(`\n⚠️  ${this.warnings.length} warnings found (showing first 10):`);
+        this.warnings.slice(0, 10).forEach(warning => console.log(`   - ${warning}`));
+        console.log(`   ... and ${this.warnings.length - 10} more`);
       }
 
       const totalIssues = this.errors.length + this.warnings.length;
       if (totalIssues === 0) {
         console.log('\n🎉 All standards validated successfully!');
+        console.log('Your project is 100% compliant with Claude Code standards.');
         return true;
       } else {
-        console.log(`\n📈 ${totalIssues} issues found (${this.errors.length} critical)`);
-        return this.errors.length === 0;
+        console.log(`\n📈 ${totalIssues} issues found (${this.errors.length} critical, ${this.warnings.length} warnings)`);
+
+        if (this.errors.length === 0) {
+          console.log('✓ No critical errors - project is compliant!');
+          return true;
+        } else {
+          console.log('✗ Critical errors found - please fix before proceeding');
+          return false;
+        }
       }
 
     } catch (error) {
-      console.error('Validation failed with error:', error);
+      console.error('\n💥 Validation failed with error:', error);
+      console.error(error.stack);
       return false;
     }
   }
