@@ -30,7 +30,9 @@ jobs:
         cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci
+      run: |
+        npm ci --prefer-offline
+        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
 
     - name: Run npm audit
       run: |
@@ -75,7 +77,9 @@ jobs:
         cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci
+      run: |
+        npm ci --prefer-offline
+        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
 
     - name: Check licenses
       run: |
@@ -126,7 +130,9 @@ jobs:
         cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci
+      run: |
+        npm ci --prefer-offline
+        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
 
     - name: Review dependencies
       run: |
