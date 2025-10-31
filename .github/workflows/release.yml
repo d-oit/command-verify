@@ -168,7 +168,7 @@ jobs:
 
     - name: Create GitHub Discussion
       if: github.event_name == 'push'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
           github.rest.repos.createDiscussion({
