@@ -1,0 +1,68 @@
+{
+  "name": "Command Verify Development",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest",
+      "installViaApt": true
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next",
+        "github.copilot",
+        "github.vscode-pull-request-github",
+        "ms-vscode.vscode-json",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "eslint.validate": [
+          "javascript",
+          "javascriptreact"
+        ],
+        "prettier.configPath": ".prettierrc.json",
+        "files.exclude": {
+          "**/node_modules": true,
+          "**/dist": true,
+          "**/coverage": true
+        }
+      }
+    }
+  },
+  "forwardPorts": [3000, 8080],
+  "portsAttributes": {
+    "3000": {
+      "label": "Development Server",
+      "onAutoForward": true
+    },
+    "8080": {
+      "label": "Test Server",
+      "onAutoForward": true
+    }
+  },
+  "postCreateCommand": "npm install",
+  "postAttachCommand": {
+    "server": "npm run dev"
+  },
+  "remoteUser": "node",
+  "mounts": [
+    "source=${localWorkspaceFolder}/.cache",
+      "target=/home/node/.cache",
+      "type=volume"
+  ],
+  "runArgs": [
+    "--cap-add=SYS_PTRACE",
+    "--security-opt=seccomp=unconfined"
+  ],
+  "remoteEnv": {
+    "NODE_ENV": "development",
+    "DEBUG": "command-verify:*"
+  }
+}

@@ -26,10 +26,24 @@
     "command-verification",
     "git-diff",
     "cache",
-    "validation"
+    "validation",
+    "claude-code",
+    "markdown",
+    "cli",
+    "automation",
+    "git",
+    "nodejs"
   ],
-  "author": "d.o.",
+  "author": {
+    "name": "d.o.",
+    "email": "contact@example.com",
+    "url": "https://github.com/doswa"
+  },
   "license": "MIT",
+  "homepage": "https://github.com/doswa/command-verify#readme",
+  "bugs": {
+    "url": "https://github.com/doswa/command-verify/issues"
+  },
   "dependencies": {
     "glob": "^10.3.10"
   },
@@ -38,7 +52,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "."
+    "url": "https://github.com/doswa/command-verify.git"
   },
   "files": [
     "scripts/",
