@@ -28,7 +28,7 @@ class ClaudeStandardsValidator {
       error: '❌',
       warning: '⚠️ ',
       success: '✅',
-      info: 'ℹ️ '
+      info: 'ℹ️ ',
     }[type] || 'ℹ️ ';
 
     console.log(`${prefix} ${message}`);
@@ -112,7 +112,7 @@ class ClaudeStandardsValidator {
 
     const skills = [
       { path: '.claude/skills/command-verify/SKILL.md', name: 'command-verify' },
-      { path: '.claude/skills/test-skill/SKILL.md', name: 'test-skill' }
+      { path: '.claude/skills/test-skill/SKILL.md', name: 'test-skill' },
     ];
 
     for (const skill of skills) {
@@ -126,7 +126,7 @@ class ClaudeStandardsValidator {
         await this.validateMarkdownYAMLFrontmatter(
           skill.path,
           requiredFields,
-          `Skill ${skill.name}`
+          `Skill ${skill.name}`,
         );
 
         // Read and validate content
@@ -193,7 +193,7 @@ class ClaudeStandardsValidator {
         if (json.components && json.components.skills) {
           this.log(`Plugin manifest: Declares skills: ${json.components.skills.join(', ')}`, 'success');
         } else {
-          this.log(`Plugin manifest: Should declare bundled components`, 'warning');
+          this.log('Plugin manifest: Should declare bundled components', 'warning');
         }
 
         // Validate plugin skill exists
@@ -204,7 +204,7 @@ class ClaudeStandardsValidator {
           await this.validateMarkdownYAMLFrontmatter(
             pluginSkillPath,
             ['name', 'description'],
-            'Plugin skill'
+            'Plugin skill',
           );
         }
       }
@@ -304,7 +304,7 @@ class ClaudeStandardsValidator {
     const commands = [
       'verify.md',
       'verify-force.md',
-      'verify-stats.md'
+      'verify-stats.md',
     ];
 
     for (const cmd of commands) {
@@ -315,7 +315,7 @@ class ClaudeStandardsValidator {
         await this.validateMarkdownYAMLFrontmatter(
           cmdPath,
           ['description'],
-          `Command ${cmd}`
+          `Command ${cmd}`,
         );
 
         // Check for allowed-tools if restricted
@@ -385,7 +385,7 @@ class ClaudeStandardsValidator {
           'Architecture',
           'Plugin Installation',
           'Configuration',
-          'File Structure'
+          'File Structure',
         ];
 
         for (const section of essentialSections) {
@@ -455,7 +455,7 @@ class ClaudeStandardsValidator {
       '.claude-plugin/marketplace.json': 'Marketplace catalog',
       'command-executor/.claude-plugin/': 'Plugin directory',
       'scripts/': 'Implementation scripts',
-      '.cache/': 'Validation cache'
+      '.cache/': 'Validation cache',
     };
 
     for (const [path, description] of Object.entries(expectedStructure)) {

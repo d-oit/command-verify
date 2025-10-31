@@ -6,7 +6,11 @@
   "available": true,
   "success": true,
   "duration": 0,
-  "message": "Categorized as conditional, available on system",
-  "validatedAt": "2025-10-30T07:41:34.945Z",
-  "commit": "f8ea33bc93b262598cb2209602257ad8d521abc8"
+  "message": "README.md:436: Requires manual review before execution.",
+  "suggestion": "Document any pre-requisites or required confirmations for this command.",
+  "severity": "warning",
+  "validatedAt": "2025-10-31T13:39:25.368Z",
+  "commit": "b580c6e33f0878bcc8692129e6ace6d01e24eeaa",
+  "checksum": "05004c9f59693d3e9e3d007d9336c1be5cc6b332",
+  "schemaVersion": 1
 }

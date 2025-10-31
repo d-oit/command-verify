@@ -6,7 +6,10 @@
   "available": true,
   "success": true,
   "duration": 0,
-  "message": "Categorized as safe, available on system",
-  "validatedAt": "2025-10-30T07:41:35.922Z",
-  "commit": "f8ea33bc93b262598cb2209602257ad8d521abc8"
+  "message": "README.md:601: Validated as safe.",
+  "severity": "info",
+  "validatedAt": "2025-10-31T13:39:32.036Z",
+  "commit": "b580c6e33f0878bcc8692129e6ace6d01e24eeaa",
+  "checksum": "16b846642bea7bd06da28a0b467166273ccd3d03",
+  "schemaVersion": 1
 }

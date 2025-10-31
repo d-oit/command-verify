@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -64,6 +65,8 @@ jspm_packages/
 .env.local
 .env.production
 
+.factory/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -107,6 +110,9 @@ Thumbs.db
 *.swo
 *~
 
+nul
+
+
 # Command verification cache (local development)
 .cache/command-validations/commands/*.json
 .cache/command-validations/executions/
@@ -114,4 +120,3 @@ Thumbs.db
 
 # Keep the checkpoint file in git (optional)
 !.cache/command-validations/last-validation-commit.txt
-nul

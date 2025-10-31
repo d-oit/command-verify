@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Command Verification - Test Coverage Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .content {
+            padding: 30px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #6c757d;
+            transition: transform 0.2s;
+        }
+        .summary-card:hover {
+            transform: translateY(-2px);
+        }
+        .summary-card.good {
+            border-left-color: #28a745;
+        }
+        .summary-card.warning {
+            border-left-color: #ffc107;
+        }
+        .summary-card.danger {
+            border-left-color: #dc3545;
+        }
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 1.1em;
+        }
+        .summary-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .summary-card .target {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .module-section {
+            margin-bottom: 40px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .module-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .module-header h2 {
+            margin: 0;
+            color: #495057;
+            font-size: 1.3em;
+        }
+        .module-content {
+            padding: 20px;
+        }
+        .coverage-bar {
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 20px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .coverage-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        .coverage-fill.good {
+            background: #28a745;
+        }
+        .coverage-fill.warning {
+            background: #ffc107;
+        }
+        .coverage-fill.danger {
+            background: #dc3545;
+        }
+        .coverage-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .stat .percentage {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat .label {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .missing-tests {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .missing-tests h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+        .missing-tests ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .missing-tests li {
+            margin: 5px 0;
+            color: #856404;
+        }
+        .recommendations {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .recommendations h2 {
+            margin: 0 0 15px 0;
+            color: #0c5460;
+        }
+        .priority-list {
+            list-style: none;
+            padding: 0;
+        }
+        .priority-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #bee5eb;
+            display: flex;
+            align-items: center;
+        }
+        .priority-list li:last-child {
+            border-bottom: none;
+        }
+        .priority-badge {
+            background: #0c5460;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-right: 15px;
+            min-width: 80px;
+            text-align: center;
+        }
+        .priority-badge.critical {
+            background: #dc3545;
+        }
+        .priority-badge.high {
+            background: #fd7e14;
+        }
+        .priority-badge.medium {
+            background: #ffc107;
+        }
+        .priority-badge.low {
+            background: #28a745;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Command Verification System</h1>
+            <p>Test Coverage Analysis Report</p>
+            <p>Generated on: <span id="timestamp"></span></p>
+        </div>
+        
+        <div class="content">
+            <div class="summary-grid">
+                <div class="summary-card good">
+                    <h3>Functions</h3>
+                    <div class="value">100.0%</div>
+                    <div class="target">6/6 covered (Target: 90%+) ✓</div>
+                </div>
+                <div class="summary-card danger">
+                    <h3>Lines</h3>
+                    <div class="value">14.2%</div>
+                    <div class="target">45/318 covered (Target: 90%+) ⚠️</div>
+                </div>
+                <div class="summary-card danger">
+                    <h3>Branches</h3>
+                    <div class="value">26.4%</div>
+                    <div class="target">19/72 covered (Target: 90%+) ⚠️</div>
+                </div>
+                <div class="summary-card danger">
+                    <h3>Statements</h3>
+                    <div class="value">14.2%</div>
+                    <div class="target">45/318 covered (Target: 90%+) ⚠️</div>
+                </div>
+            </div>
+
+            <div class="module-section">
+                <div class="module-header">
+                    <h2>📁 lib/command-detection.js</h2>
+                </div>
+                <div class="module-content">
+                    <div class="coverage-stats">
+                        <div class="stat">
+                            <div class="percentage" style="color: #28a745;">100.0%</div>
+                            <div class="label">Functions (1/1)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #dc3545;">19.7%</div>
+                            <div class="label">Lines (15/76)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #ffc107;">40.0%</div>
+                            <div class="label">Branches (8/20)</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <strong>Line Coverage:</strong>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill danger" style="width: 19.7%"></div>
+                        </div>
+                    </div>
+
+                    <div class="missing-tests">
+                        <h4>🚨 Missing Test Scenarios:</h4>
+                        <ul>
+                            <li>All early return branches (lines 27-53) - markdown filtering</li>
+                            <li>Common command prefix matching (line 56) - COMMON_COMMAND_PREFIXES array</li>
+                            <li>sudo/su pattern matching (line 61) - privilege escalation detection</li>
+                            <li>Relative path detection (line 62) - ./ and ../ patterns</li>
+                            <li>Hyphenated tool detection (line 66) - word-word regex pattern</li>
+                            <li>Simple command pattern (line 71) - basic command structure</li>
+                            <li>Boundary conditions - length = 2, length = 100</li>
+                            <li>Special character handling - Unicode, emojis</li>
+                            <li>Input validation - null, undefined, non-string inputs</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-section">
+                <div class="module-header">
+                    <h2>📁 lib/command-extraction.js</h2>
+                </div>
+                <div class="module-content">
+                    <div class="coverage-stats">
+                        <div class="stat">
+                            <div class="percentage" style="color: #28a745;">100.0%</div>
+                            <div class="label">Functions (2/2)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #dc3545;">14.8%</div>
+                            <div class="label">Lines (12/81)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #dc3545;">20.0%</div>
+                            <div class="label">Branches (3/15)</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <strong>Line Coverage:</strong>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill danger" style="width: 14.8%"></div>
+                        </div>
+                    </div>
+
+                    <div class="missing-tests">
+                        <h4>🚨 Missing Test Scenarios:</h4>
+                        <ul>
+                            <li>Code block regex matching (line 24) - COMMAND_PATTERNS.codeBlock</li>
+                            <li>Line number calculation (line 31) - content.split('\n').length logic</li>
+                            <li>Inline code extraction (line 45) - COMMAND_PATTERNS.inlineCode</li>
+                            <li>Generic code block handling (line 61) - fallback extraction</li>
+                            <li>Malformed code blocks - missing closing backticks</li>
+                            <li>Nested backticks handling - backticks within code blocks</li>
+                            <li>Multiple language support - bash, shell, powershell, etc.</li>
+                            <li>Command object creation - all properties (file, line, type, language)</li>
+                            <li>Empty/null content handling - edge case inputs</li>
+                            <li>Large file processing - performance with 1000+ lines</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-section">
+                <div class="module-header">
+                    <h2>📁 lib/command-categorization.js</h2>
+                </div>
+                <div class="module-content">
+                    <div class="coverage-stats">
+                        <div class="stat">
+                            <div class="percentage" style="color: #28a745;">100.0%</div>
+                            <div class="label">Functions (1/1)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #dc3545;">9.6%</div>
+                            <div class="label">Lines (10/104)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #dc3545;">16.0%</div>
+                            <div class="label">Branches (4/25)</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <strong>Line Coverage:</strong>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill danger" style="width: 9.6%"></div>
+                        </div>
+                    </div>
+
+                    <div class="missing-tests">
+                        <h4>🚨 Missing Test Scenarios:</h4>
+                        <ul>
+                            <li>Knowledge base skip logic (line 10) - shouldSkipCommand integration</li>
+                            <li>Knowledge base precedence (line 15) - override hardcoded patterns</li>
+                            <li>All dangerous patterns (lines 22-34) - rm -rf, git push --force, etc.</li>
+                            <li>All conditional patterns (lines 37-55) - npm install, docker build, etc.</li>
+                            <li>All safe patterns (lines 58-79) - npm run build, git status, etc.</li>
+                            <li>Command object handling (line 7) - .command property extraction</li>
+                            <li>Empty/null command handling - edge case inputs</li>
+                            <li>Confidence scoring validation - 0.50, 0.90, 0.95, 1.0 values</li>
+                            <li>Regex pattern testing - all pattern matching logic</li>
+                            <li>Category priority - dangerous > safe > conditional > unknown</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="module-section">
+                <div class="module-header">
+                    <h2>📁 lib/knowledge-base.js</h2>
+                </div>
+                <div class="module-content">
+                    <div class="coverage-stats">
+                        <div class="stat">
+                            <div class="percentage" style="color: #28a745;">100.0%</div>
+                            <div class="label">Functions (2/2)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #dc3545;">14.0%</div>
+                            <div class="label">Lines (8/57)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="percentage" style="color: #ffc107;">33.3%</div>
+                            <div class="label">Branches (4/12)</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <strong>Line Coverage:</strong>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill danger" style="width: 14.0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="missing-tests">
+                        <h4>🚨 Missing Test Scenarios:</h4>
+                        <ul>
+                            <li>Validation rules structure handling (line 5) - optional chaining</li>
+                            <li>Pattern matching with try-catch (lines 14-19) - invalid regex handling</li>
+                            <li>Category priority ordering (line 31) - dangerous > safe > conditional</li>
+                            <li>Exact match vs pattern priority - exactMatches tested first</li>
+                            <li>Invalid regex handling - malformed patterns in knowledge base</li>
+                            <li>Empty validation rules - missing skip/dangerous/safe properties</li>
+                            <li>Knowledge base structure validation - missing validationRules</li>
+                            <li>Confidence levels - 1.0 for exact, 0.95 for patterns</li>
+                            <li>Edge case knowledge bases - null, undefined, empty objects</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="recommendations">
+                <h2>🎯 Recommendations for >90% Coverage</h2>
+                <ul class="priority-list">
+                    <li>
+                        <span class="priority-badge critical">CRITICAL</span>
+                        <span>Fix Vitest configuration - resolve "No test suite found" errors to enable proper coverage reporting</span>
+                    </li>
+                    <li>
+                        <span class="priority-badge high">HIGH</span>
+                        <span>Add comprehensive line coverage tests - target all uncovered lines in each module</span>
+                    </li>
+                    <li>
+                        <span class="priority-badge high">HIGH</span>
+                        <span>Add branch coverage tests - test all conditional statements and early returns</span>
+                    </li>
+                    <li>
+                        <span class="priority-badge medium">MEDIUM</span>
+                        <span>Add integration tests - test complete workflows between modules</span>
+                    </li>
+                    <li>
+                        <span class="priority-badge medium">MEDIUM</span>
+                        <span>Add performance tests - validate large file processing (>1000 lines)</span>
+                    </li>
+                    <li>
+                        <span class="priority-badge low">LOW</span>
+                        <span>Add mock tests - create mocks for fs, git, and glob dependencies</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="recommendations">
+                <h2>📊 Estimated Effort Analysis</h2>
+                <div class="coverage-stats">
+                    <div class="stat">
+                        <div class="percentage" style="color: #dc3545;">87</div>
+                        <div class="label">Additional Test Cases Needed</div>
+                    </div>
+                    <div class="stat">
+                        <div class="percentage" style="color: #dc3545;">75.8%</div>
+                        <div class="label">Line Coverage Gap</div>
+                    </div>
+                    <div class="stat">
+                        <div class="percentage" style="color: #dc3545;">63.6%</div>
+                        <div class="label">Branch Coverage Gap</div>
+                    </div>
+                    <div class="stat">
+                        <div class="percentage" style="color: #ffc107;">2-3</div>
+                        <div class="label">Days of Focused Work</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Generated by Verification Test Engineer | Command Verification System</p>
+            <p>Coverage Thresholds: Functions ≥90%, Lines ≥90%, Branches ≥90%, Statements ≥90%</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+    </script>
+</body>
+</html>
