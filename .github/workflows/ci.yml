@@ -29,11 +29,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci --prefer-offline
-        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
+        npm install --legacy-peer-deps
+        npm ls
 
     - name: Run linter
-      run: npm run lint || echo "⚠️ Linter completed with warnings"
+      run: npm run lint
 
     - name: Run tests
       run: npm run test:coverage
@@ -71,8 +71,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci --prefer-offline
-        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
+        npm install --legacy-peer-deps
+        npm ls
 
     - name: Verify commands in documentation
       run: npm run verify
@@ -100,14 +100,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci --prefer-offline
-        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
+        npm install --legacy-peer-deps
+        npm ls
 
     - name: Run npm audit
-      run: |
-        echo "🔍 Running npm security audit..."
-        npm audit --audit-level=moderate || echo "⚠️ npm audit found issues"
-        echo "✅ npm audit completed"
+      run: npm audit --audit-level=moderate
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4

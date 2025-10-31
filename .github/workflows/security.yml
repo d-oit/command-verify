@@ -31,14 +31,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci --prefer-offline
-        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
+        npm install --legacy-peer-deps
+        npm ls
 
     - name: Run npm audit
-      run: |
-        echo "🔍 Running npm security audit..."
-        npm audit --audit-level=moderate || echo "⚠️ npm audit found issues"
-        echo "✅ npm audit completed"
+      run: npm audit --audit-level=moderate
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -78,14 +75,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci --prefer-offline
-        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
+        npm install --legacy-peer-deps
+        npm ls
 
     - name: Check licenses
-      run: |
-        echo "📜 Checking license compliance..."
-        npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' || echo "⚠️ License check found issues"
-        echo "✅ License check completed"
+      run: npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC'
 
   secret-scan:
     name: Secret Scanning
@@ -131,14 +125,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci --prefer-offline
-        npm ls || echo "⚠️ Some packages may have peer dependency warnings"
+        npm install --legacy-peer-deps
+        npm ls
 
     - name: Review dependencies
-      run: |
-        echo "🔍 Reviewing dependency changes..."
-        npm outdated || echo "⚠️ Some dependencies are outdated"
-        echo "✅ Dependency review completed"
+      run: npm outdated
 
     - name: Comment on PR
       if: failure()
