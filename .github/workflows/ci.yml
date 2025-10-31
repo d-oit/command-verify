@@ -44,6 +44,21 @@ jobs:
         files: ./coverage/lcov.info
         fail_ci_if_error: false
 
+    - name: Generate SLSA provenance
+      uses: slsa-framework/slsa-github-generator@v1
+      with:
+        base64-subjects: "${{ steps.hash.outputs.hashes }}"
+        provenance-name: "ci-build.provenance"
+      
+    - name: Lock dependencies
+      run: npm shrinkwrap
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        format: spdx
+        output-file: sbom.spdx.json
+
   verify-commands:
     name: Verify Documentation Commands
     runs-on: ubuntu-latest
