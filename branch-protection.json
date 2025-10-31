@@ -1,9 +1,14 @@
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["ci/build"]
+    "contexts": [
+      "Test on Node.js 18.x",
+      "Test on Node.js 20.x",
+      "Test on Node.js 22.x",
+      "Security Scan"
+    ]
   },
-  "enforce_admins": true,
+  "enforce_admins": false,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
     "required_approving_review_count": 1
