@@ -44,15 +44,6 @@ jobs:
         files: ./coverage/lcov.info
         fail_ci_if_error: false
 
-    - name: Generate SLSA provenance
-      uses: slsa-framework/slsa-github-generator@v1
-      with:
-        base64-subjects: "${{ steps.hash.outputs.hashes }}"
-        provenance-name: "ci-build.provenance"
-      
-    - name: Lock dependencies
-      run: npm shrinkwrap
-
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
       with:
@@ -88,6 +79,10 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     
     steps:
     - name: Checkout code
@@ -106,3 +101,5 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:javascript"
