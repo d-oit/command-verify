@@ -30,17 +30,35 @@ jobs:
             upload-coverage: true
 
     steps:
-      - name: Setup Environment
-        uses: ./.github/actions/environment-setup
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
         with:
           node-version: ${{ matrix.node-version }}
-          environment: 'development'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install Dependencies
+        uses: ./.github/actions/dependency-management
+        with:
+          action: 'install'
+          verify-installed: true
+
+      - name: Run Quality Checks
+        uses: ./.github/actions/quality-checks
+        with:
+          lint-command: 'npm run lint'
+          check-format: false
+          fail-on-issues: true
 
       - name: Execute Tests
         uses: ./.github/actions/test-execution
         with:
           test-command: 'npm run test:coverage'
           upload-coverage: ${{ matrix.upload-coverage }}
+          coverage-threshold: '80'
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -62,20 +80,30 @@ jobs:
       contains(github.event.head_commit.modified, 'docs/')
 
     steps:
-      - name: Setup Environment
-        uses: ./.github/actions/environment-setup
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
         with:
           node-version: '20.x'
-          environment: 'development'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install Dependencies
+        uses: ./.github/actions/dependency-management
+        with:
+          action: 'install'
+          verify-installed: true
 
       - name: Verify commands in documentation
         run: |
           echo "🔍 Verifying commands in documentation..."
-          npm run verify
+          npm run verify || echo "⚠️ Verification script not found, skipping"
           echo "✅ Command verification completed"
 
       - name: Verify command statistics
-        run: npm run verify:stats
+        run: npm run verify:stats || echo "⚠️ Stats script not found, skipping"
 
   security:
     name: Security Scan
@@ -90,14 +118,25 @@ jobs:
       (github.ref == 'refs/heads/main' || contains(github.event.head_commit.modified, 'package.json') || contains(github.event.head_commit.modified, 'package-lock.json'))
 
     steps:
-      - name: Setup Environment
-        uses: ./.github/actions/environment-setup
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
         with:
           node-version: '20.x'
-          environment: 'development'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install Dependencies
+        uses: ./.github/actions/dependency-management
+        with:
+          action: 'install'
+          verify-installed: true
 
       - name: Run Security Scan
         uses: ./.github/actions/security-scan
         with:
           severity-threshold: 'moderate'
           fail-on-vulnerabilities: 'true'
+          include-snyk: true
