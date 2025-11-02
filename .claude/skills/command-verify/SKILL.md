@@ -1,6 +1,10 @@
 ---
 name: command-verify
+version: "0.2.0"
 description: Intelligent command verification for documentation. Discovers all commands in markdown files, validates them using git diff-based cache invalidation, and ensures documentation accuracy with zero token cost after initial setup. Use when asked to verify commands, check documentation, or validate command references.
+author: "Claude Code"
+categories: ["documentation", "validation", "automation", "git"]
+keywords: ["command", "verification", "documentation", "cache", "git-diff", "validation", "automation"]
 allowed-tools: Read,Glob,Grep,Bash
 ---
 

@@ -1,0 +1,96 @@
+name: 'Setup Node.js Environment'
+description: 'Complete Node.js setup with optimized caching for npm dependencies'
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '20.x'
+  cache-dependency-path:
+    description: 'Path to dependency file for caching'
+    required: false
+    default: 'package-lock.json'
+  install-command:
+    description: 'Command to install dependencies (ci or install)'
+    required: false
+    default: 'ci'
+  peer-deps:
+    description: 'Use legacy peer deps flag'
+    required: false
+    default: 'true'
+  verify-dependencies:
+    description: 'Verify installed dependencies after install'
+    required: false
+    default: 'true'
+
+outputs:
+  cache-hit:
+    description: 'Whether npm cache was hit'
+    value: ${{ steps.setup-node.outputs.cache-hit }}
+  node-version:
+    description: 'Node.js version that was set up'
+    value: ${{ steps.setup-node.outputs.node-version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
+        sparse-checkout: |
+          package.json
+          package-lock.json
+          lib/
+          __tests__/
+          scripts/
+          eslint.config.js
+          vitest.config.js
+        sparse-checkout-cone-mode: false
+
+    - name: Setup Node.js
+      id: setup-node
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Cache npm dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          node_modules
+        key: npm-${{ runner.os }}-${{ hashFiles(inputs.cache-dependency-path) }}
+        restore-keys: |
+          npm-${{ runner.os }}-
+          npm-
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        if [ "${{ inputs.install-command }}" = "ci" ]; then
+          if [ "${{ inputs.peer-deps }}" = "true" ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm ci
+          fi
+        else
+          if [ "${{ inputs.peer-deps }}" = "true" ]; then
+            npm install --legacy-peer-deps
+          else
+            npm install
+          fi
+        fi
+
+    - name: Verify dependencies
+      if: inputs.verify-dependencies == 'true'
+      shell: bash
+      run: npm ls --depth=0
+
+    - name: Environment summary
+      shell: bash
+      run: |
+        echo "✅ Node.js ${{ inputs.node-version }} setup completed"
+        echo "📦 Dependencies installed using ${{ inputs.install-command }}"
+        echo "💾 Cache status: ${{ steps.setup-node.outputs.cache-hit }}"

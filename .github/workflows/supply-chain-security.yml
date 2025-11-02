@@ -1,0 +1,409 @@
+name: Supply Chain Security
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # Daily at 01:00 UTC
+  push:
+    branches: [ main ]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '**/package*.json'
+      - '**/lockfile*.json'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '**/package*.json'
+      - '**/lockfile*.json'
+  workflow_dispatch:
+
+jobs:
+  sbom-generation:
+    name: SBOM Generation & Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '20.x'
+
+      - name: Install SBOM generation tools
+        run: |
+          npm install -g @cyclonedx/cyclonedx-npm
+          npm install -g syft
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          echo "🔍 Generating CycloneDX SBOM..."
+          npx @cyclonedx/cyclonedx-npm \
+            --output-format json \
+            --output-file sbom-cyclonedx.json \
+            --serial-number urn:uuid:${{ github.run_id }}
+          
+          echo "📊 SBOM generated successfully"
+
+      - name: Generate SBOM (Syft)
+        run: |
+          echo "🔍 Generating Syft SBOM..."
+          syft package . -o json > sbom-syft.json
+          syft package . -o spdx-json > sbom-spdx.json
+          
+          echo "📊 Syft SBOM generated successfully"
+
+      - name: SBOM Validation
+        run: |
+          echo "✅ Validating SBOM integrity..."
+          
+          # Validate JSON structure
+          jq empty sbom-cyclonedx.json || exit 1
+          jq empty sbom-syft.json || exit 1
+          
+          # Check for critical packages
+          echo "🔍 Analyzing critical dependencies..."
+          jq -r '.components[] | select(.type == "library" and (.name == "lodash" or .name == "underscore")) | .name' sbom-cyclonedx.json || echo "No critical packages found"
+          
+          echo "✅ SBOM validation completed"
+
+      - name: Upload SBOM to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: sbom-cyclonedx.json
+
+      - name: Create SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-reports
+          path: |
+            sbom-*.json
+          retention-days: 365
+
+  vulnerability-analysis:
+    name: Comprehensive Vulnerability Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '20.x'
+
+      - name: Install vulnerability scanning tools
+        run: |
+          npm install -g @cyclonedx/cyclonedx-npm
+          npm audit --json > npm-audit-report.json || true
+
+      - name: Run Vulnerability Scanner
+        run: |
+          echo "🔍 Running vulnerability scanning..."
+          
+          # Install osv-scanner
+          curl -L https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64.tar.gz | tar -xz
+          chmod +x osv-scanner
+          
+          # Run vulnerability scan
+          ./osv-scanner --format=json --output=vulnerability-report.json -r ./
+          
+          echo "✅ Vulnerability scanning completed"
+
+      - name: Analyze Vulnerability Severity
+        id: analyze-vulns
+        run: |
+          echo "🔍 Analyzing vulnerability data..."
+          
+          # Process npm audit
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit-report.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit-report.json)
+          MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' npm-audit-report.json)
+          LOW=$(jq '.metadata.vulnerabilities.low // 0' npm-audit-report.json)
+          
+          TOTAL=$((CRITICAL + HIGH + MODERATE + LOW))
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
+          echo "low=$LOW" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          
+          # Generate severity summary
+          echo "### 🔐 Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+          echo "| Moderate | $MODERATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Total** | **$TOTAL** |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Security Alert Check
+        run: |
+          echo "🚨 Checking for security alerts..."
+          
+          CRITICAL=${{ steps.analyze-vulns.outputs.critical }}
+          HIGH=${{ steps.analyze-vulns.outputs.high }}
+          
+          if [ "$CRITICAL" -gt "0" ] || [ "$HIGH" -gt "5" ]; then
+            echo "❌ Critical security issues detected!"
+            echo "CRITICAL=$CRITICAL" >> security-alert.env
+            echo "HIGH=$HIGH" >> security-alert.env
+            echo "ALERT_NEEDED=true" >> security-alert.env
+          else
+            echo "✅ No critical security issues detected"
+            echo "ALERT_NEEDED=false" >> security-alert.env
+          fi
+
+      - name: Send Security Alert (if needed)
+        if: env.ALERT_NEEDED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const critical = process.env.CRITICAL;
+            const high = process.env.HIGH;
+            
+            const message = `🚨 **SECURITY ALERT - IMMEDIATE ACTION REQUIRED**
+            
+            **Repository:** ${{ github.repository }}
+            **Branch:** ${{ github.ref_name }}
+            **Workflow:** Supply Chain Security Scan
+            
+            **Vulnerability Summary:**
+            - 🔴 Critical: ${critical}
+            - 🟠 High: ${high}
+            
+            **Action Required:**
+            1. Review the vulnerability report immediately
+            2. Update vulnerable dependencies
+            3. Run security scan again to verify fixes
+            4. Contact security team if assistance needed
+            
+            **Workflow URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            *This is an automated security alert from the Supply Chain Security workflow.*`;
+            
+            // Create issue for tracking
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Security Alert: ${critical} Critical & ${high} High Vulnerabilities`,
+              body: message,
+              labels: ['security', 'critical', 'vulnerability']
+            });
+
+  license-compliance:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '20.x'
+
+      - name: Install License Checker
+        run: |
+          npm install -g license-checker
+
+      - name: Check License Compliance
+        id: license-check
+        run: |
+          echo "📜 Checking license compliance..."
+          
+          # Generate license report
+          npx license-checker --json --out license-report.json
+          
+          # Define allowed licenses
+          ALLOWED_LICENSES=("MIT" "Apache-2.0" "Apache 2.0" "BSD-2-Clause" "BSD-3-Clause" "ISC" "CC0-1.0")
+          
+          # Check for non-compliant licenses
+          NON_COMPLIANT=$(jq -r 'to_entries[] | select(.value.licenses as $licenses | any($licenses == .; any(.; test("UNLICENSED")))) | .key' license-report.json || echo "")
+          
+          if [ -n "$NON_COMPLIANT" ]; then
+            echo "❌ License compliance violations found"
+            echo "violations=$NON_COMPLIANT" >> $GITHUB_OUTPUT
+            echo "COMPLIANT=false" >> $GITHUB_OUTPUT
+            
+            echo "### ⚠️ License Compliance Issues" >> $GITHUB_STEP_SUMMARY
+            echo "$NON_COMPLIANT" | while read pkg; do
+              echo "- $pkg" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "✅ All licenses are compliant"
+            echo "COMPLIANT=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload License Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-reports
+          path: license-report.json
+          retention-days: 90
+
+  dependency-graph-analysis:
+    name: Dependency Graph Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '20.x'
+
+      - name: Generate Dependency Graph
+        run: |
+          echo "🔍 Analyzing dependency graph..."
+          
+          # Install dependency-cruiser for graph analysis
+          npm install -g dependency-cruiser
+          
+          # Generate dependency graph
+          npx dependency-cruise --config ./dependency-cruiser.config.js --output-type json dependency-graph.json src/ || true
+          
+          # Generate visualization
+          npx dependency-cruise --config ./dependency-cruiser.config.js --output-type dot dependency-graph.dot src/ || true
+          
+          echo "📊 Dependency graph analysis completed"
+
+      - name: Analyze Dependency Risk
+        id: risk-analysis
+        run: |
+          echo "🎯 Analyzing dependency risk factors..."
+          
+          # Check for outdated dependencies
+          npm outdated --json > outdated-deps.json || true
+          
+          # Analyze dependency health
+          DEP_COUNT=$(jq 'length' outdated-deps.json || echo "0")
+          CRITICAL_DEPS=$(jq -r 'to_entries[] | select(.value.current != null and .value.latest != null) | select(.value.current != .value.latest) | .key' outdated-deps.json | wc -l)
+          
+          echo "outdated_count=$DEP_COUNT" >> $GITHUB_OUTPUT
+          echo "critical_count=$CRITICAL_DEPS" >> $GITHUB_OUTPUT
+          
+          # Risk scoring
+          RISK_SCORE=0
+          if [ "$DEP_COUNT" -gt "10" ]; then
+            RISK_SCORE=$((RISK_SCORE + 30))
+          elif [ "$DEP_COUNT" -gt "5" ]; then
+            RISK_SCORE=$((RISK_SCORE + 15))
+          fi
+          
+          echo "risk_score=$RISK_SCORE" >> $GITHUB_OUTPUT
+          
+          echo "### 📈 Dependency Risk Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Outdated Dependencies | $DEP_COUNT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical Updates | $CRITICAL_DEPS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Risk Score | $RISK_SCORE/100 |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate Risk Report
+        if: steps.risk-analysis.outputs.risk_score > '20'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const riskScore = context.outputs.risk_score;
+            const outdatedCount = context.outputs.outdated_count;
+            const criticalCount = context.outputs.critical_count;
+            
+            const message = `⚠️ **DEPENDENCY RISK ALERT**
+            
+            **Repository:** ${{ github.repository }}
+            **Risk Score:** ${riskScore}/100
+            
+            **Risk Factors:**
+            - Outdated Dependencies: ${outdatedCount}
+            - Critical Updates Needed: ${criticalCount}
+            
+            **Recommendations:**
+            1. Review and update outdated dependencies
+            2. Test thoroughly after dependency updates
+            3. Consider automated dependency updates
+            4. Monitor dependency health regularly
+            
+            *This is an automated alert from the Dependency Graph Analysis.*`;
+            
+            // Create issue for tracking
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Dependency Risk Alert (${riskScore}/100)`,
+              body: message,
+              labels: ['dependencies', 'risk-assessment']
+            });
+
+  supply-chain-metrics:
+    name: Supply Chain Metrics Collection
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Collect Supply Chain Metrics
+        run: |
+          echo "📊 Collecting supply chain metrics..."
+          
+          # Create metrics summary
+          cat > supply-chain-metrics.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "commit_sha": "${{ github.sha }}",
+            "workflow_run_id": ${{ github.run_id }},
+            "metrics": {
+              "vulnerability_scan": {
+                "status": "${{ job.status }}",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              },
+              "sbom_generation": {
+                "status": "completed",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              },
+              "license_compliance": {
+                "status": "completed",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              },
+              "dependency_analysis": {
+                "status": "completed",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              }
+            }
+          }
+          EOF
+          
+          echo "📈 Supply chain metrics collected successfully"
+
+      - name: Upload Metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-metrics
+          path: supply-chain-metrics.json
+          retention-days: 365

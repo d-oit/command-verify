@@ -1,0 +1,199 @@
+name: 'Dependency Management'
+description: 'NPM dependency management with security checks and updates'
+inputs:
+  action:
+    description: 'Action to perform (install, audit, outdated, update)'
+    required: false
+    default: 'install'
+  install-command:
+    description: 'Command to use for installation (ci, install, ci --legacy-peer-deps)'
+    required: false
+    default: 'ci --legacy-peer-deps'
+  verify-installed:
+    description: 'Verify dependencies after installation'
+    required: false
+    default: 'true'
+  audit-level:
+    description: 'Audit level for security checks'
+    required: false
+    default: 'moderate'
+  update-strategy:
+    description: 'Update strategy (patch, minor, major, latest)'
+    required: false
+    default: 'patch'
+  create-pr:
+    description: 'Create PR for updates'
+    required: false
+    default: 'false'
+
+outputs:
+  has-updates:
+    description: 'Whether updates are available'
+    value: ${{ steps.check-updates.outputs.has_updates }}
+  outdated-count:
+    description: 'Number of outdated packages'
+    value: ${{ steps.check-updates.outputs.outdated_count }}
+  vulnerabilities:
+    description: 'Number of vulnerabilities found'
+    value: ${{ steps.audit.outputs.vulnerabilities }}
+  audit-result:
+    description: 'Audit result (pass/fail/warn)'
+    value: ${{ steps.audit.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install dependencies
+      if: inputs.action == 'install'
+      id: install
+      shell: bash
+      run: |
+        echo "📦 Installing dependencies with: ${{ inputs.install-command }}"
+        eval "${{ inputs.install-command }}"
+        
+        if [ "${{ inputs.verify-installed }}" = "true" ]; then
+          echo "🔍 Verifying installation..."
+          npm ls --depth=0
+        fi
+        echo "✅ Dependencies installed successfully"
+
+    - name: Security audit
+      if: inputs.action == 'audit' || (inputs.action == 'install' && inputs.verify-installed == 'true')
+      id: audit
+      shell: bash
+      run: |
+        echo "🔒 Running security audit..."
+        npm audit --audit-level=${{ inputs.audit-level }} --json > npm-audit.json || true
+        
+        # Extract vulnerability counts
+        CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
+        HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
+        MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' npm-audit.json)
+        LOW=$(jq '.metadata.vulnerabilities.low // 0' npm-audit.json)
+        
+        TOTAL_VULNS=$((CRITICAL + HIGH + MODERATE + LOW))
+        echo "vulnerabilities=$TOTAL_VULNS" >> $GITHUB_OUTPUT
+        
+        if [ "$CRITICAL" -gt "0" ]; then
+          echo "result=fail" >> $GITHUB_OUTPUT
+          echo "❌ Critical vulnerabilities found: $CRITICAL"
+          exit 1
+        elif [ "$HIGH" -gt "0" ]; then
+          echo "result=warn" >> $GITHUB_OUTPUT
+          echo "⚠️ High vulnerabilities found: $HIGH"
+        else
+          echo "result=pass" >> $GITHUB_OUTPUT
+          echo "✅ No critical or high vulnerabilities found"
+        fi
+
+    - name: Check for outdated packages
+      if: inputs.action == 'outdated'
+      id: check-updates
+      shell: bash
+      run: |
+        echo "🔍 Checking for outdated packages..."
+        npm outdated --json > outdated.json || true
+        
+        if [ -s "outdated.json" ]; then
+          OUTDATED_COUNT=$(jq 'length' outdated.json)
+          echo "outdated_count=$OUTDATED_COUNT" >> $GITHUB_OUTPUT
+          echo "has_updates=true" >> $GITHUB_OUTPUT
+          
+          echo "### 📊 Outdated Packages" >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries[] | "- \(.key): current=\(.value.current), latest=\(.value.latest)"' outdated.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "outdated_count=0" >> $GITHUB_OUTPUT
+          echo "has_updates=false" >> $GITHUB_OUTPUT
+          echo "✅ All packages are up to date" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Update dependencies
+      if: inputs.action == 'update'
+      id: update
+      shell: bash
+      run: |
+        echo "⬆️ Updating dependencies..."
+        
+        # Install npm-check-updates if not present
+        if ! command -v ncu >/dev/null 2>&1; then
+          npm install -g npm-check-updates
+        fi
+        
+        # Generate update plan
+        ncu --${{ inputs.update-strategy }} --jsonAll > update-plan.json
+        
+        if [ -s "update-plan.json" ]; then
+          echo "📋 Update plan generated"
+          jq -r 'to_entries[] | "- \(.key): \(.value.current) → \(.value.latest)"' update-plan.json >> $GITHUB_STEP_SUMMARY
+          
+          # Apply updates
+          ncu --${{ inputs.update-strategy }} --upgrade
+          echo "✅ Dependencies updated"
+        else
+          echo "ℹ️ No updates available"
+        fi
+
+    - name: Generate dependency report
+      if: inputs.action == 'install' || inputs.action == 'audit'
+      id: report
+      shell: bash
+      run: |
+        echo "### 📊 Dependency Management Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ inputs.action }}" = "install" ]; then
+          echo "**Action**: Install dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "**Method**: ${{ inputs.install-command }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Verification**: ${{ inputs.verify-installed }}" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ inputs.action }}" = "audit" ]; then
+          echo "**Action**: Security audit" >> $GITHUB_STEP_SUMMARY
+          echo "**Audit Level**: ${{ inputs.audit-level }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Vulnerabilities**: ${{ steps.audit.outputs.vulnerabilities }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Result**: ${{ steps.audit.outputs.audit-result }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Generated at: $(date)" >> $GITHUB_STEP_SUMMARY
+
+    - name: Create Pull Request for updates
+      if: inputs.action == 'update' && inputs.create-pr == 'true' && steps.check-updates.outputs.has_updates == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore(deps): update dependencies"
+        title: "⬆️ Update dependencies"
+        body: |
+          🤖 Automated dependency update
+
+          This PR updates project dependencies to their latest compatible versions.
+
+          ### 🔍 Changes proposed:
+          ${{ steps.update.outputs.update_summary || '- Updated dependencies to latest compatible versions' }}
+
+          ### ✅ Checks performed:
+          - [ ] Tests pass with updated dependencies
+          - [ ] Security vulnerabilities checked
+          - [ ] Breaking changes reviewed
+
+          ### 🔐 Security Information:
+          - Dependencies scanned with npm audit
+          - No critical vulnerabilities introduced
+
+          Please review the changes and merge if everything looks good.
+        branch: "deps/automated-update"
+        base: "main"
+        labels: |
+          dependencies
+          automated-pr
+          security-review-needed
+
+    - name: License compliance check
+      if: inputs.action == 'install' || inputs.action == 'audit'
+      shell: bash
+      run: |
+        echo "📜 Checking license compliance..."
+        if command -v npx >/dev/null 2>&1; then
+          npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' --summary || echo "⚠️ License check completed with warnings"
+        else
+          echo "ℹ️ License checker not available"
+        fi

@@ -1,6 +1,10 @@
 ---
 name: test-skill
+version: "0.1.0"
 description: A simple test skill that analyzes code files and provides a summary report. Use when asked to analyze code structure, count files, or provide project statistics. Demonstrates Claude Code skill functionality.
+author: "Claude Code"
+categories: ["analysis", "demonstration", "testing"]
+keywords: ["analysis", "code", "summary", "statistics", "testing", "demonstration"]
 allowed-tools: Read,Glob
 ---
 

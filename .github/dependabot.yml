@@ -1,35 +1,56 @@
+# Enhanced Dependabot Configuration with Security Auto-Merging
 version: 2
+
 updates:
-  # Enable version updates for npm
+  # NPM Dependencies
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    assignees:
-      - "d-oit"
+      interval: "daily"
+      time: "03:00"
+      timezone: "Europe/Berlin"
+    
+    # Security-focused settings
+    open-pull-requests-limit: 10
+    rebase-strategy: "auto"
+    versioning-strategy: "increase"
+    
+    # Commit message configuration
     commit-message:
-      prefix: "chore"
+      prefix: "deps"
+      prefix-development: "deps-dev"
       include: "scope"
+    
+    # Labels for organization
     labels:
       - "dependencies"
-      - "npm"
-
-  # Enable version updates for GitHub Actions
+      - "automated-pr"
+      - "security-review"
+    
+    # Ignore specific packages that might cause issues
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      
+  # GitHub Actions updates
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 3
-    assignees:
-      - "d-oit"
+      time: "03:00"
+      timezone: "Europe/Berlin"
+    
+    # Actions-specific settings
+    open-pull-requests-limit: 20
+    rebase-strategy: "auto"
+    versioning-strategy: "increase"
+    
     commit-message:
-      prefix: "chore"
+      prefix: "ci"
       include: "scope"
+    
     labels:
-      - "dependencies"
       - "github-actions"
+      - "automated-pr"

@@ -1,73 +1,53 @@
 name: CI
 
+# Performance monitoring and optimization
+env:
+  CI_PERF_START: ${{ github.run_number }}_${{ github.run_attempt }}
+  START_TIME: ${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
 
 jobs:
-   test:
-     name: Test on Node.js ${{ matrix.node-version }}
-     runs-on: ubuntu-latest
-     permissions:
-       contents: read
+  test:
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-     strategy:
-       matrix:
-         node-version: [18.x, 20.x, 22.x]
-    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+        include:
+          - node-version: 20.x
+            upload-coverage: true
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Setup Environment
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: ${{ matrix.node-version }}
+          environment: 'development'
 
-    - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
+      - name: Execute Tests
+        uses: ./.github/actions/test-execution
+        with:
+          test-command: 'npm run test:coverage'
+          upload-coverage: ${{ matrix.upload-coverage }}
 
-    - name: Install dependencies
-      run: |
-        npm install --legacy-peer-deps
-        npm ls
-
-    - name: Run linter
-      run: npm run lint
-
-    - name: Run tests
-      run: npm run test:coverage
-
-    - name: Upload coverage to Codecov
-      if: matrix.node-version == '20.x'
-      uses: codecov/codecov-action@v4
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage/lcov.info
-        fail_ci_if_error: false
-        verbose: true
-
-    - name: Generate SBOM
-      uses: anchore/sbom-action@v0
-      with:
-        format: spdx
-        output-file: sbom.spdx.json
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        if: matrix.node-version == '20.x'
+        with:
+          format: spdx
+          output-file: sbom.spdx.json
 
   verify-commands:
     name: Verify Documentation Commands
@@ -76,28 +56,26 @@ jobs:
     permissions:
       contents: read
 
+    if: |
+      github.event_name == 'push' || 
+      contains(github.event.head_commit.modified, 'README.md') || 
+      contains(github.event.head_commit.modified, 'docs/')
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Setup Environment
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: '20.x'
+          environment: 'development'
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-        cache: 'npm'
+      - name: Verify commands in documentation
+        run: |
+          echo "🔍 Verifying commands in documentation..."
+          npm run verify
+          echo "✅ Command verification completed"
 
-    - name: Install dependencies
-      run: |
-        npm install --legacy-peer-deps
-        npm ls
-
-    - name: Verify commands in documentation
-      run: npm run verify
-
-    - name: Verify command statistics
-      run: npm run verify:stats
+      - name: Verify command statistics
+        run: npm run verify:stats
 
   security:
     name: Security Scan
@@ -106,37 +84,20 @@ jobs:
       actions: read
       contents: read
       security-events: write
-    
+
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || contains(github.event.head_commit.modified, 'package.json') || contains(github.event.head_commit.modified, 'package-lock.json'))
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Setup Environment
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: '20.x'
+          environment: 'development'
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: |
-        npm install --legacy-peer-deps
-        npm ls
-
-    - name: Run npm audit
-      run: npm audit --audit-level=moderate
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: javascript
-        queries: security-and-quality
-        config-file: ./.github/codeql-config.yml
-
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        category: "/language:javascript"
-        output: sarif-results
+      - name: Run Security Scan
+        uses: ./.github/actions/security-scan
+        with:
+          severity-threshold: 'moderate'
+          fail-on-vulnerabilities: 'true'

@@ -1,0 +1,128 @@
+name: 'CI Workflow Template'
+description: 'Reusable CI workflow template with configurable steps'
+
+inputs:
+  node-version:
+    description: 'Node.js version(s) to test against'
+    required: false
+    default: '20.x'
+  test-command:
+    description: 'Test command to execute'
+    required: false
+    default: 'npm run test:coverage'
+  run-security-scan:
+    description: 'Include security scanning'
+    required: false
+    default: 'true'
+  coverage-upload:
+    description: 'Upload coverage reports'
+    required: false
+    default: 'true'
+  node-matrix:
+    description: 'JSON array of Node.js versions for matrix'
+    required: false
+    default: '["18.x", "20.x", "22.x"]'
+  include-verify-commands:
+    description: 'Include command verification step'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+
+jobs:
+  test-matrix:
+    name: 'Test on Node.js ${{ matrix.node-version }}'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ${{ fromJson(inputs.node-matrix) }}
+        include:
+          - node-version: 20.x
+            upload-coverage: ${{ inputs.coverage-upload }}
+
+    steps:
+      - name: 'Setup Environment'
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: ${{ matrix.node-version }}
+          environment: 'development'
+
+      - name: 'Execute Tests'
+        uses: ./.github/actions/test-execution
+        with:
+          test-command: ${{ inputs.test-command }}
+          upload-coverage: ${{ matrix.upload-coverage }}
+
+      - name: 'Security Scan'
+        if: inputs.run-security-scan == 'true' && matrix.node-version == '20.x'
+        uses: ./.github/actions/security-scan
+        with:
+          severity-threshold: 'moderate'
+
+  verify-commands:
+    name: 'Verify Documentation Commands'
+    runs-on: ubuntu-latest
+    needs: test-matrix
+    if: inputs.include-verify-commands == 'true'
+
+    steps:
+      - name: 'Setup Environment'
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: '20.x'
+          environment: 'development'
+
+      - name: 'Verify Commands'
+        run: |
+          echo "🔍 Verifying commands in documentation..."
+          npm run verify
+          echo "✅ Command verification completed"
+
+  quality-checks:
+    name: 'Code Quality Checks'
+    runs-on: ubuntu-latest
+    needs: test-matrix
+
+    steps:
+      - name: 'Setup Environment'
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: '20.x'
+          environment: 'development'
+
+      - name: 'Quality Checks'
+        uses: ./.github/actions/quality-checks
+        with:
+          lint-command: 'npm run lint'
+          check-format: 'true'
+
+  summary:
+    name: 'CI Summary'
+    runs-on: ubuntu-latest
+    needs: [test-matrix, verify-commands, quality-checks]
+    if: always()
+
+    steps:
+      - name: 'Generate Summary'
+        run: |
+          echo "## 🚀 CI Workflow Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Results**: ${{ needs.test-matrix.result }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.include-verify-commands }}" = "true" ]; then
+            echo "**Command Verification**: ${{ needs.verify-commands.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "**Quality Checks**: ${{ needs.quality-checks.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Determine overall status
+          ALL_PASSED=true
+          if [ "${{ needs.test-matrix.result }}" != "success" ]; then ALL_PASSED=false; fi
+          if [ "${{ inputs.include-verify-commands }}" = "true" ] && [ "${{ needs.verify-commands.result }}" != "success" ]; then ALL_PASSED=false; fi
+          if [ "${{ needs.quality-checks.result }}" != "success" ]; then ALL_PASSED=false; fi
+          
+          if [ "$ALL_PASSED" = true ]; then
+            echo "🎉 All CI checks passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some CI checks failed" >> $GITHUB_STEP_SUMMARY
+          fi

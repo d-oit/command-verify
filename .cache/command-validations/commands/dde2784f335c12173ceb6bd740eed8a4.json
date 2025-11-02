@@ -9,8 +9,8 @@
   "message": "README.md:435: Requires manual review before execution.",
   "suggestion": "Document any pre-requisites or required confirmations for this command.",
   "severity": "warning",
-  "validatedAt": "2025-10-31T13:39:25.187Z",
-  "commit": "b580c6e33f0878bcc8692129e6ace6d01e24eeaa",
+  "validatedAt": "2025-11-01T19:36:19.404Z",
+  "commit": "99e097e93e1b4dee9393e51f91eb63b49c83cf22",
   "checksum": "98fc1dcaa90bc27a46f05f7b8e123136a5770267",
   "schemaVersion": 1
 }

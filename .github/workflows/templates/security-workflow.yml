@@ -1,0 +1,187 @@
+name: 'Security Scan Workflow Template'
+description: 'Reusable security scanning workflow template'
+
+inputs:
+  scan-types:
+    description: 'JSON array of scan types to perform'
+    required: false
+    default: '["codeql", "npm-audit", "snyk", "secrets", "licenses"]'
+  severity-threshold:
+    description: 'Minimum severity to fail on'
+    required: false
+    default: 'moderate'
+  include-dependency-review:
+    description: 'Include dependency review for PRs'
+    required: false
+    default: 'true'
+  create-pr-comments:
+    description: 'Create comments on PRs for security issues'
+    required: false
+    default: 'true'
+  node-version:
+    description: 'Node.js version for scanning'
+    required: false
+    default: '20.x'
+
+outputs:
+  security-score:
+    description: 'Overall security score'
+    value: ${{ steps.security-summary.outputs.score }}
+
+runs:
+  using: 'composite'
+
+jobs:
+  codeql-analysis:
+    name: 'CodeQL Security Analysis'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: 'Setup Environment'
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: ${{ inputs.node-version }}
+          environment: 'development'
+
+      - name: 'Security Scan'
+        uses: ./.github/actions/security-scan
+        with:
+          severity-threshold: ${{ inputs.severity-threshold }}
+          include-snyk: 'true'
+          fail-on-vulnerabilities: 'false'
+
+  dependency-review:
+    name: 'Dependency Review'
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && inputs.include-dependency-review == 'true'
+    permissions:
+      contents: read
+
+    steps:
+      - name: 'Checkout PR'
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup Environment'
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: ${{ inputs.node-version }}
+          environment: 'development'
+
+      - name: 'Dependency Management'
+        uses: ./.github/actions/dependency-management
+        with:
+          action: 'audit'
+          audit-level: ${{ inputs.severity-threshold }}
+
+  license-check:
+    name: 'License Compliance'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: 'Setup Environment'
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: ${{ inputs.node-version }}
+          environment: 'development'
+
+      - name: 'License Check'
+        run: |
+          echo "📜 Checking license compliance..."
+          npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' --summary || echo "⚠️ License check completed with warnings"
+          
+          echo "### 📜 License Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "✅ License compliance check completed" >> $GITHUB_STEP_SUMMARY
+
+  secret-scanning:
+    name: 'Secret Scanning'
+    runs-on: ubuntu-latest
+    if: contains(fromJson(inputs.scan-types), 'secrets')
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: 'Checkout with full history'
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: 'Run Gitleaks'
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: true
+
+      - name: 'Run TruffleHog'
+        if: github.event_name != 'pull_request'
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: ./
+          base: ${{ github.event.before || github.event.pull_request.base.sha }}
+          head: ${{ github.event.after || github.event.pull_request.head.sha }}
+          extra_args: --regex --entropy=False
+
+  security-summary:
+    name: 'Security Summary'
+    runs-on: ubuntu-latest
+    needs: [codeql-analysis, dependency-review, license-check, secret-scanning]
+    if: always()
+    outputs:
+      score: ${{ steps.calculate-score.outputs.score }}
+
+    steps:
+      - name: 'Calculate Security Score'
+        id: calculate-score
+        run: |
+          # Simple scoring based on job results
+          SCORE=100
+          
+          if [ "${{ needs.codeql-analysis.result }}" != "success" ]; then
+            SCORE=$((SCORE - 25))
+          fi
+          
+          if [ "${{ needs.dependency-review.result }}" != "success" ]; then
+            SCORE=$((SCORE - 20))
+          fi
+          
+          if [ "${{ needs.license-check.result }}" != "success" ]; then
+            SCORE=$((SCORE - 15))
+          fi
+          
+          if [ "${{ needs.secret-scanning.result }}" != "success" ]; then
+            SCORE=$((SCORE - 30))
+          fi
+          
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          
+          echo "### 🛡️ Security Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**CodeQL Analysis**: ${{ needs.codeql-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.include-dependency-review }}" = "true" ]; then
+            echo "**Dependency Review**: ${{ needs.dependency-review.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "**License Check**: ${{ needs.license-check.result }}" >> $GITHUB_STEP_SUMMARY
+          if [ "true" = "true" ]; then
+            echo "**Secret Scanning**: ${{ needs.secret-scanning.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Security Score**: $SCORE/100" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$SCORE" -ge "80" ]; then
+            echo "🟢 Good security posture" >> $GITHUB_STEP_SUMMARY
+          elif [ "$SCORE" -ge "60" ]; then
+            echo "🟡 Moderate security posture" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🔴 Security concerns found" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,122 @@
+name: Enterprise SLA & Monitoring
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # Every 2 hours
+  workflow_dispatch:
+
+jobs:
+  sla-tracking:
+    name: SLA Performance Tracking
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: SLA Analysis
+        uses: actions/github-script@v7
+        id: sla-analysis
+        with:
+          script: |
+            const { data: runs } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            // Calculate SLA metrics
+            const now = new Date();
+            const last24h = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+            
+            const recentRuns = runs.workflow_runs.filter(run => 
+              new Date(run.created_at) >= last24h
+            );
+            
+            const successfulRuns = recentRuns.filter(run => run.conclusion === 'success').length;
+            const totalRuns = recentRuns.length;
+            const availability = totalRuns > 0 ? (successfulRuns / totalRuns) * 100 : 100;
+            
+            // SLA targets (99.5% availability)
+            const slaTarget = 99.5;
+            const isMeetingSLA = availability >= slaTarget;
+            
+            // Calculate MTTR (Mean Time To Recovery)
+            const failureTimes = recentRuns
+              .filter(run => run.conclusion === 'failure')
+              .map(run => new Date(run.updated_at).getTime());
+            
+            let mttr = 0;
+            if (failureTimes.length > 1) {
+              const avgFailureTime = failureTimes.reduce((a, b) => a + b, 0) / failureTimes.length;
+              mttr = (avgFailureTime - now.getTime()) / 1000 / 60; // minutes
+            }
+            
+            core.setOutput('availability', availability.toFixed(2));
+            core.setOutput('sla_target', slaTarget);
+            core.setOutput('meets_sla', isMeetingSLA.toString());
+            core.setOutput('mttr', mttr.toFixed(2));
+            core.setOutput('total_runs', totalRuns.toString());
+
+      - name: SLA Report
+        run: |
+          echo "### 📊 SLA Performance Report" >> $GITHUB_STEP_SUMMARY
+          echo "**Period:** Last 24 hours" >> $GITHUB_STEP_SUMMARY
+          echo "**Generated:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value | Target | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Availability | ${{ steps.sla-analysis.outputs.availability }}% | 99.5% | $([ "${{ steps.sla-analysis.outputs.meets_sla }}" = "true" ] && echo "✅" || echo "❌") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Runs | ${{ steps.sla-analysis.outputs.total_runs }} | - | 📊 |" >> $GITHUB_STEP_SUMMARY
+          echo "| MTTR | ${{ steps.sla-analysis.outputs.mttr }}m | <15m | 📈 |" >> $GITHUB_STEP_SUMMARY
+
+      - name: SLA Alert
+        if: steps.sla-analysis.outputs.meets_sla == 'false'
+        run: |
+          echo "⚠️ SLA Alert: Availability below target"
+          echo "ALERT_NEEDED=true" >> $GITHUB_ENV
+
+  performance-analytics:
+    name: Performance Analytics
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Calculate Performance Metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: runs } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 50
+            });
+            
+            const performanceData = runs.workflow_runs
+              .filter(run => run.run_started_at && run.updated_at)
+              .map(run => {
+                const start = new Date(run.run_started_at);
+                const end = new Date(run.updated_at);
+                return {
+                  name: run.name,
+                  duration: (end - start) / 1000 / 60, // minutes
+                  conclusion: run.conclusion,
+                  created_at: run.created_at
+                };
+              });
+            
+            const avgDuration = performanceData.length > 0 
+              ? performanceData.reduce((sum, run) => sum + run.duration, 0) / performanceData.length
+              : 0;
+            
+            // Cost analysis (estimated)
+            const monthlyRuns = performanceData.length * 30;
+            const avgCostPerRun = avgDuration * 0.008; // GitHub Actions cost
+            const monthlyCost = monthlyRuns * avgCostPerRun;
+            
+            core.setOutput('avg_duration', avgDuration.toFixed(2));
+            core.setOutput('monthly_cost', monthlyCost.toFixed(2));
+            core.setOutput('total_runs', performanceData.length.toString());
+
+      - name: Performance Summary
+        run: |
+          echo "### ⚡ Performance Analytics" >> $GITHUB_STEP_SUMMARY
+          echo "**Average Duration:** ${{ steps.analytics.outputs.avg_duration }} minutes" >> $GITHUB_STEP_SUMMARY
+          echo "**Monthly Cost Estimate:** $${{ steps.analytics.outputs.monthly_cost }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Analyzed Runs:** ${{ steps.analytics.outputs.total_runs }}" >> $GITHUB_STEP_SUMMARY

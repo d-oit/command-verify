@@ -1,7 +1,11 @@
 ---
 name: command-executor
+version: "0.2.0"
 description: Executes safe commands and captures real output to extend command-verify functionality. Only runs when explicitly requested. Use when asked to actually run commands, execute commands, test if commands work, or verify commands actually execute.
-allowed-tools: Read,Glob,Bash
+author: "Claude Code"
+categories: ["execution", "testing", "automation", "validation"]
+keywords: ["command", "execution", "testing", "output", "performance", "safety"]
+allowed-tools: Read,Glob,Bash,AskUserQuestion
 ---
 
 # Command Executor

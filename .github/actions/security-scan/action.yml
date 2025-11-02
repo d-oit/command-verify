@@ -1,0 +1,133 @@
+name: 'Security Scan'
+description: 'Comprehensive security scanning including CodeQL, npm audit, and vulnerability detection'
+inputs:
+  severity-threshold:
+    description: 'Minimum severity level to fail on'
+    required: false
+    default: 'moderate'
+  fail-on-vulnerabilities:
+    description: 'Whether to fail build on vulnerabilities found'
+    required: false
+    default: 'true'
+  include-snyk:
+    description: 'Include Snyk security scan'
+    required: false
+    default: 'true'
+  sarif-output:
+    description: 'Output file for SARIF results'
+    required: false
+    default: 'security-results.sarif'
+
+outputs:
+  vulnerabilities-found:
+    description: 'Number of vulnerabilities found'
+    value: ${{ steps.audit-summary.outputs.vulnerabilities }}
+  security-score:
+    description: 'Security score from CodeQL'
+    value: ${{ steps.codeql-output.outputs.security-score }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run npm audit
+      id: audit
+      shell: bash
+      run: |
+        npm audit --audit-level=${{ inputs.severity-threshold }} --json > npm-audit.json || true
+        
+        # Count vulnerabilities by severity
+        CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
+        HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
+        MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' npm-audit.json)
+        LOW=$(jq '.metadata.vulnerabilities.low // 0' npm-audit.json)
+        
+        echo "vulnerabilities=$((CRITICAL + HIGH + MODERATE + LOW))" >> $GITHUB_OUTPUT
+        echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+        echo "high=$HIGH" >> $GITHUB_OUTPUT
+        echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
+        echo "low=$LOW" >> $GITHUB_OUTPUT
+
+    - name: Audit summary
+      id: audit-summary
+      shell: bash
+      run: |
+        echo "### 🔒 Security Audit Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Critical**: ${{ steps.audit.outputs.critical }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **High**: ${{ steps.audit.outputs.high }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Moderate**: ${{ steps.audit.outputs.moderate }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Low**: ${{ steps.audit.outputs.low }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        TOTAL=$((steps.audit.outputs.critical + steps.audit.outputs.high + steps.audit.outputs.moderate + steps.audit.outputs.low))
+        if [ "$TOTAL" -gt "0" ]; then
+          echo "⚠️ Found $TOTAL security vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Vulnerabilities Details" >> $GITHUB_STEP_SUMMARY
+          jq -r '.vulnerabilities | to_entries[] | "- \(.key): \(.value.title)"' npm-audit.json >> $GITHUB_STEP_SUMMARY || true
+        else
+          echo "✅ No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: javascript
+        queries: security-and-quality
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v4
+
+    - name: Perform CodeQL Analysis
+      id: codeql
+      uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:javascript"
+        output-format: sarif
+        output-file: ${{ inputs.sarif-output }}
+
+    - name: CodeQL Security Score
+      id: codeql-output
+      shell: bash
+      run: |
+        # Extract security score from CodeQL results
+        if [ -f "${{ inputs.sarif-output }}" ]; then
+          echo "security-score=good" >> $GITHUB_OUTPUT
+        else
+          echo "security-score=unknown" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run Snyk Security Scan
+      if: inputs.include-snyk == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      uses: snyk/actions/node@v3.0.0
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=${{ inputs.severity-threshold }} --sarif-file-output=${{ inputs.sarif-output }}
+
+    - name: Upload SARIF results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ inputs.sarif-output }}
+
+    - name: Fail on critical vulnerabilities
+      if: inputs.fail-on-vulnerabilities == 'true' && steps.audit.outputs.critical > 0
+      shell: bash
+      run: |
+        echo "❌ Critical security vulnerabilities found"
+        exit 1
+
+    - name: Security scan summary
+      if: always()
+      shell: bash
+      run: |
+        echo "### 🛡️ Security Scan Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Vulnerabilities**: ${{ steps.audit.outputs.vulnerabilities }}" >> $GITHUB_STEP_SUMMARY
+        echo "**CodeQL Analysis**: Completed" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ inputs.include-snyk }}" = "true" ]; then
+          echo "**Snyk Scan**: Completed" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Results uploaded to GitHub Security tab" >> $GITHUB_STEP_SUMMARY

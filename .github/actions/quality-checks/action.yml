@@ -1,0 +1,194 @@
+name: 'Quality Checks'
+description: 'Comprehensive code quality checks including linting, formatting, and type checking'
+inputs:
+  lint-command:
+    description: 'Command to run linting'
+    required: false
+    default: 'npm run lint'
+  fix-lint:
+    description: 'Automatically fix linting issues'
+    required: false
+    default: 'false'
+  check-format:
+    description: 'Check code formatting'
+    required: false
+    default: 'true'
+  format-command:
+    description: 'Command to check formatting'
+    required: false
+    default: 'npm run format:check'
+  type-check:
+    description: 'Run TypeScript type checking'
+    required: false
+    default: 'false'
+  type-check-command:
+    description: 'Type check command'
+    required: false
+    default: 'npm run type-check'
+  fail-on-issues:
+    description: 'Fail build on quality issues'
+    required: false
+    default: 'true'
+  report-format:
+    description: 'Format for quality reports'
+    required: false
+    default: 'github'
+
+outputs:
+  quality-score:
+    description: 'Overall quality score (0-100)'
+    value: ${{ steps.quality-score.outputs.score }}
+  lint-issues:
+    description: 'Number of linting issues found'
+    value: ${{ steps.lint-results.outputs.issues }}
+  format-issues:
+    description: 'Number of formatting issues found'
+    value: ${{ steps.format-results.outputs.issues }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache ESLint results
+      uses: actions/cache@v4
+      with:
+        path: .eslintcache
+        key: eslint-${{ runner.os }}-${{ hashFiles('eslint.config.js', 'lib/**/*.js', '__tests__/**/*.js', 'scripts/**/*.js') }}
+        restore-keys: |
+          eslint-${{ runner.os }}-
+
+    - name: Run ESLint
+      id: lint
+      shell: bash
+      run: |
+        if [ "${{ inputs.fix-lint }}" = "true" ]; then
+          npm run lint -- --fix
+        else
+          npm run lint
+        fi
+        
+        LINT_EXIT=$?
+        echo "exit_code=$LINT_EXIT" >> $GITHUB_OUTPUT
+        
+        # Count issues if possible
+        if command -v jq >/dev/null 2>&1 && [ -f "eslint-results.json" ]; then
+          ISSUES=$(jq '.results[0].errorCount + .results[0].warningCount' eslint-results.json || echo "0")
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+        else
+          echo "issues=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Lint results
+      id: lint-results
+      shell: bash
+      run: |
+        EXIT_CODE=${{ steps.lint.outputs.exit_code }}
+        ISSUES=${{ steps.lint.outputs.issues }}
+        
+        echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+        
+        if [ "$EXIT_CODE" -eq "0" ]; then
+          echo "✅ ESLint passed with $ISSUES issues" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ ESLint failed with $ISSUES issues" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Check code formatting
+      if: inputs.check-format == 'true'
+      id: format
+      shell: bash
+      run: |
+        if eval "${{ inputs.format-command }}"; then
+          echo "exit_code=0" >> $GITHUB_OUTPUT
+          echo "issues=0" >> $GITHUB_OUTPUT
+          echo "✅ Code formatting is correct" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "exit_code=1" >> $GITHUB_OUTPUT
+          echo "issues=1" >> $GITHUB_OUTPUT
+          echo "❌ Code formatting issues found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Format results
+      id: format-results
+      shell: bash
+      run: |
+        if [ "${{ inputs.check-format }}" = "true" ]; then
+          echo "issues=${{ steps.format.outputs.issues }}" >> $GITHUB_OUTPUT
+        else
+          echo "issues=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Type checking
+      if: inputs.type-check == 'true'
+      id: typecheck
+      shell: bash
+      run: |
+        if eval "${{ inputs.type-check-command }}"; then
+          echo "exit_code=0" >> $GITHUB_OUTPUT
+          echo "✅ Type checking passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "exit_code=1" >> $GITHUB_OUTPUT
+          echo "❌ Type checking failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Generate quality report
+      id: quality-report
+      shell: bash
+      run: |
+        LINT_ISSUES=${{ steps.lint-results.outputs.issues }}
+        FORMAT_ISSUES=${{ steps.format-results.outputs.issues }}
+        TYPE_ISSUES=0
+        
+        if [ "${{ inputs.type-check }}" = "true" ]; then
+          TYPE_ISSUES=${{ steps.typecheck.outputs.exit_code }}
+        fi
+        
+        TOTAL_ISSUES=$((LINT_ISSUES + FORMAT_ISSUES + TYPE_ISSUES))
+        
+        echo "### 📏 Quality Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **ESLint**: $LINT_ISSUES issues" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ inputs.check-format }}" = "true" ]; then
+          echo "- **Formatting**: $FORMAT_ISSUES issues" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "${{ inputs.type-check }}" = "true" ]; then
+          echo "- **Type Check**: ${{ steps.typecheck.outputs.exit_code == '0' && '✅ Pass' || '❌ Fail' }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Total Issues**: $TOTAL_ISSUES" >> $GITHUB_STEP_SUMMARY
+        
+        # Calculate quality score (100 - issues, minimum 0)
+        if [ "$TOTAL_ISSUES" -gt "0" ]; then
+          QUALITY_SCORE=$(echo "max(0, 100 - $TOTAL_ISSUES)" | bc -l || echo "0")
+        else
+          QUALITY_SCORE=100
+        fi
+        
+        echo "quality-score=$QUALITY_SCORE" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$TOTAL_ISSUES" -eq "0" ]; then
+          echo "🎉 Perfect code quality!" >> $GITHUB_STEP_SUMMARY
+        elif [ "$TOTAL_ISSUES" -lt "5" ]; then
+          echo "✅ Good code quality" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Code quality needs improvement" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Quality score
+      id: quality-score
+      shell: bash
+      run: |
+        echo "score=${{ steps.quality-report.outputs.quality-score }}" >> $GITHUB_OUTPUT
+
+    - name: Fail on quality issues
+      if: inputs.fail-on-issues == 'true'
+      shell: bash
+      run: |
+        TOTAL_ISSUES=$(({{ steps.lint-results.outputs.issues }} + {{ steps.format-results.outputs.issues }}))
+        if [ "${{ inputs.type-check }}" = "true" ]; then
+          TOTAL_ISSUES=$((TOTAL_ISSUES + {{ steps.typecheck.outputs.exit_code }}))
+        fi
+        
+        if [ "$TOTAL_ISSUES" -gt "0" ]; then
+          echo "❌ Quality issues found: $TOTAL_ISSUES"
+          exit 1
+        fi

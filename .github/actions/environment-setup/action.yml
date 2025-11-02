@@ -1,0 +1,210 @@
+name: 'Environment Setup'
+description: 'Setup and validation of development environment with shared configurations'
+inputs:
+  node-version:
+    description: 'Node.js version to setup'
+    required: false
+    default: '20.x'
+  os:
+    description: 'Operating system to use'
+    required: false
+    default: 'ubuntu-latest'
+  environment:
+    description: 'Environment type (development, staging, production)'
+    required: false
+    default: 'development'
+  validate-node-version:
+    description: 'Validate Node.js version matches expected'
+    required: false
+    default: 'true'
+  check-secrets:
+    description: 'Check for required secrets'
+    required: false
+    default: 'true'
+  setup-git:
+    description: 'Setup git configuration'
+    required: false
+    default: 'true'
+  validate-package-json:
+    description: 'Validate package.json structure'
+    required: false
+    default: 'true'
+
+outputs:
+  node-version-installed:
+    description: 'Node.js version that was installed'
+    value: ${{ steps.node-version.outputs.version }}
+  os-info:
+    description: 'Operating system information'
+    value: ${{ steps.os-info.outputs.info }}
+  environment-valid:
+    description: 'Whether environment is properly configured'
+    value: ${{ steps.environment-check.outputs.valid }}
+  secrets-missing:
+    description: 'List of missing required secrets'
+    value: ${{ steps.secrets-check.outputs.missing }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js environment
+      id: node-setup
+      uses: ./.github/actions/setup-node
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Check Node.js version
+      id: node-version
+      shell: bash
+      run: |
+        VERSION=$(node --version)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "✅ Node.js $VERSION is available"
+        
+        if [ "${{ inputs.validate-node-version }}" = "true" ]; then
+          if [[ "$VERSION" == v${{ inputs.node-version }}* ]]; then
+            echo "✅ Node.js version matches expected: ${{ inputs.node-version }}"
+          else
+            echo "⚠️ Node.js version $VERSION doesn't match expected: ${{ inputs.node-version }}"
+          fi
+        fi
+
+    - name: System information
+      id: os-info
+      shell: bash
+      run: |
+        echo "info=${{ inputs.os }} ($(uname -a | head -c 50))" >> $GITHUB_OUTPUT
+        echo "📊 System Information:" >> $GITHUB_STEP_SUMMARY
+        echo "- **OS**: ${{ inputs.os }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architecture**: $(uname -m)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Node.js**: $(node --version)" >> $GITHUB_STEP_SUMMARY
+        echo "- **NPM**: $(npm --version)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: Setup git configuration
+      if: inputs.setup-git == 'true'
+      shell: bash
+      run: |
+        git config --global user.email "action@github.com"
+        git config --global user.name "GitHub Action"
+        git config --global advice.detachedHead false
+        echo "✅ Git configuration completed"
+
+    - name: Validate package.json
+      if: inputs.validate-package-json == 'true'
+      shell: bash
+      run: |
+        if [ -f "package.json" ]; then
+          echo "✅ package.json found"
+          
+          # Validate required fields
+          REQUIRED_FIELDS=("name" "version" "scripts" "dependencies")
+          for field in "${REQUIRED_FIELDS[@]}"; do
+            if ! jq -e ".$field" package.json > /dev/null; then
+              echo "❌ Missing required field: $field"
+              exit 1
+            fi
+          done
+          
+          echo "✅ package.json validation passed"
+          
+          # Extract key information
+          NAME=$(jq -r '.name' package.json)
+          VERSION=$(jq -r '.version' package.json)
+          
+          echo "### 📦 Project Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: $NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Node.js**: ${{ inputs.node-version }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ package.json not found"
+        fi
+
+    - name: Check required secrets
+      if: inputs.check-secrets == 'true'
+      id: secrets-check
+      shell: bash
+      run: |
+        MISSING=""
+        
+        # Check for commonly used secrets based on workflow type
+        if [ "${{ inputs.environment }}" = "production" ]; then
+          REQUIRED_SECRETS=("GITHUB_TOKEN")
+        else
+          REQUIRED_SECRETS=("GITHUB_TOKEN")
+        fi
+        
+        for secret in "${REQUIRED_SECRETS[@]}"; do
+          if [ -z "${!secret}" ]; then
+            if [ -z "$MISSING" ]; then
+              MISSING="$secret"
+            else
+              MISSING="$MISSING, $secret"
+            fi
+          fi
+        done
+        
+        if [ -z "$MISSING" ]; then
+          echo "missing=" >> $GITHUB_OUTPUT
+          echo "✅ All required secrets are available" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "missing=$MISSING" >> $GITHUB_OUTPUT
+          echo "⚠️ Missing secrets: $MISSING" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Environment validation
+      id: environment-check
+      shell: bash
+      run: |
+        VALID=true
+        
+        # Check Node.js installation
+        if ! command -v node >/dev/null 2>&1; then
+          echo "❌ Node.js not found"
+          VALID=false
+        fi
+        
+        # Check NPM installation
+        if ! command -v npm >/dev/null 2>&1; then
+          echo "❌ NPM not found"
+          VALID=false
+        fi
+        
+        # Check package.json
+        if [ "${{ inputs.validate-package-json }}" = "true" ] && [ ! -f "package.json" ]; then
+          echo "❌ package.json not found"
+          VALID=false
+        fi
+        
+        # Check secrets (only fail for production)
+        if [ "${{ inputs.environment }}" = "production" ] && [ -n "${{ steps.secrets-check.outputs.missing }}" ]; then
+          echo "❌ Required secrets missing for production"
+          VALID=false
+        fi
+        
+        if [ "$VALID" = true ]; then
+          echo "valid=true" >> $GITHUB_OUTPUT
+          echo "✅ Environment validation passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "valid=false" >> $GITHUB_OUTPUT
+          echo "❌ Environment validation failed" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: Environment summary
+      if: always()
+      shell: bash
+      run: |
+        echo "### 🚀 Environment Setup Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Node.js**: ${{ steps.node-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Platform**: ${{ inputs.os }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Validation**: ${{ steps.environment-check.outputs.valid }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.environment-check.outputs.valid }}" = "true" ]; then
+          echo "🎉 Environment is ready for development!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "🚨 Environment setup has issues" >> $GITHUB_STEP_SUMMARY
+        fi

@@ -30,146 +30,119 @@ jobs:
       discussions: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-        cache: 'npm'
+      - name: Setup Environment
+        uses: ./.github/actions/environment-setup
+        with:
+          node-version: '20.x'
+          environment: 'production'
+          check-secrets: 'true'
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Run tests
+        uses: ./.github/actions/test-execution
+        with:
+          test-command: 'npm run test:coverage'
+          coverage-threshold: '80'
 
-    - name: Run tests
-      run: |
-        echo "🧪 Running tests before release..."
-        npm run test:coverage
-        echo "✅ All tests passed"
+      - name: Quality Checks
+        uses: ./.github/actions/quality-checks
+        with:
+          lint-command: 'npm run lint'
+          check-format: 'true'
+          fail-on-issues: 'true'
 
-    - name: Build project
-      run: |
-        echo "🔨 Building project..."
-        npm run lint
-        echo "✅ Build completed"
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "📝 Generating changelog..."
+          
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - get all commits
+            CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
+          else
+            # Subsequent release - get commits since last tag
+            CHANGELOG=$(git log --pretty=format:"- %s" --no-merges $PREVIOUS_TAG..HEAD)
+          fi
+          
+          # Format changelog
+          if [ -n "$CHANGELOG" ]; then
+            echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+            echo "## Changes since $PREVIOUS_TAG" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "$CHANGELOG" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+            echo "## 🎉 Initial Release" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "First stable release of Command Verify!" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "✅ Changelog generated"
 
-    - name: Generate changelog
-      id: changelog
-      run: |
-        echo "📝 Generating changelog..."
-        
-        # Get previous tag
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        
-        if [ -z "$PREVIOUS_TAG" ]; then
-          # First release - get all commits
-          CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
-        else
-          # Subsequent release - get commits since last tag
-          CHANGELOG=$(git log --pretty=format:"- %s" --no-merges $PREVIOUS_TAG..HEAD)
-        fi
-        
-        # Format changelog
-        if [ -n "$CHANGELOG" ]; then
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "## Changes since $PREVIOUS_TAG" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-        else
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "## 🎉 Initial Release" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "First stable release of Command Verify!" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-        fi
-        
-        echo "✅ Changelog generated"
+      - name: Generate Release Assets
+        run: |
+          echo "📦 Creating release assets..."
 
-    - name: Generate Release Assets
-      run: |
-        echo "📦 Creating release assets..."
+          # Create distribution directory
+          mkdir -p dist
 
-        # Create distribution directory
-        mkdir -p dist
+          # Create npm package
+          npm pack --pack-destination dist
 
-        # Create npm package
-        npm pack --pack-destination dist
+          # Create source archive
+          git archive --format=tar.gz --prefix=command-verify/ HEAD > dist/command-verify-${{ github.ref_name }}.tar.gz
 
-        # Create source archive
-        git archive --format=tar.gz --prefix=command-verify/ HEAD > dist/command-verify-${{ github.ref_name }}.tar.gz
+          # Create zip archive
+          git archive --format=zip --prefix=command-verify/ HEAD > dist/command-verify-${{ github.ref_name }}.zip
 
-        # Create zip archive
-        git archive --format=zip --prefix=command-verify/ HEAD > dist/command-verify-${{ github.ref_name }}.zip
+          # Generate checksums
+          cd dist
+          sha256sum * > checksums.txt
+          cd ..
 
-        # Generate checksums
-        cd dist
-        sha256sum * > checksums.txt
-        cd ..
+          echo "✅ Release assets created"
 
-        echo "✅ Release assets created"
+      - name: Validate version format
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ ! "${{ github.event.inputs.version }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "❌ Invalid version format: ${{ github.event.inputs.version }}"
+            echo "Expected format: v1.2.3 or 1.2.3 or 1.2.3-beta.1"
+            exit 1
+          fi
+          echo "✅ Version format validated"
 
-    - name: Validate version format
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        if [[ ! "${{ github.event.inputs.version }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-          echo "❌ Invalid version format: ${{ github.event.inputs.version }}"
-          echo "Expected format: v1.2.3 or 1.2.3 or 1.2.3-beta.1"
-          exit 1
-        fi
-        echo "✅ Version format validated"
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          name: Release ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          files: |
+            dist/command-verify-${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}.tgz
+            dist/command-verify-${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}.tar.gz
+            dist/command-verify-${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}.zip
+            dist/checksums.txt
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}
-        name: Release ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}
-        body: ${{ steps.changelog.outputs.changelog }}
-        draft: false
-        prerelease: ${{ github.event.inputs.prerelease || false }}
-        files: |
-          dist/command-verify-${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}.tgz
-          dist/command-verify-${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}.tar.gz
-          dist/command-verify-${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref_name }}.zip
-          dist/checksums.txt
-
-    - name: Update NPM (if not prerelease)
-      if: github.event.inputs.prerelease != 'true'
-      run: |
-        echo "📦 Publishing to NPM..."
-        npm publish
-        echo "✅ Published to NPM"
-
-    - name: Create GitHub Discussion
-      if: github.event_name == 'push'
-      uses: actions/github-script@v8
-      with:
-        script: |
-          github.rest.repos.createDiscussion({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `🎉 Release ${{ github.ref_name }} is now available!`,
-            body: `## 🚀 What's New\n\n${{ steps.changelog.outputs.changelog }}\n\n## 📦 Installation\n\n\`\`\`bash\nnpm install command-verify@${{ github.ref_name }}\n\`\`\`\n\n## 🔗 Links\n\n- [NPM Package](https://www.npmjs.com/package/command-verify)\n- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})\n\n## 🐛 Issues?\n\nFound a bug? [Please report it](https://github.com/${{ github.repository }}/issues/new)!\n\n---\n\nThank you for using Command Verify! 🙏`,
-            category: 'announcements'
-          })
-
-    - name: Notify Success
-      run: |
-        echo "🎉 Release ${{ github.ref_name }} completed successfully!"
-        echo "📦 Assets uploaded to GitHub"
-        echo "📝 Changelog generated"
-        echo "🔗 Discussion created"
-        echo ""
-        echo "📊 Release Summary:"
-        echo "- Version: ${{ github.ref_name }}"
-        echo "- Assets: npm package, source archives, checksums"
-        echo "- Documentation: Updated with changelog"
-        echo "- Community: Discussion thread created"
+      - name: Update NPM (if not prerelease)
+        if: github.event.inputs.prerelease != 'true'
+        run: |
+          echo "📦 Publishing to NPM..."
+          npm publish
+          echo "✅ Published to NPM"
 
   update-docs:
     name: Update Documentation
@@ -180,19 +153,18 @@ jobs:
       contents: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Update README badges
-      run: |
-        echo "📝 Updating documentation..."
-        # Update version in README if needed
-        sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v${{ github.ref_name }}/g" README.md
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add README.md
-        git diff --staged --quiet || git commit -m "docs: update version to ${{ github.ref_name }}"
-        git push
-        echo "✅ Documentation updated"
+      - name: Update README badges
+        run: |
+          echo "📝 Updating documentation..."
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v${{ github.ref_name }}/g" README.md
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git diff --staged --quiet || git commit -m "docs: update version to ${{ github.ref_name }}"
+          git push
+          echo "✅ Documentation updated"

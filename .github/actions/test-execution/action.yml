@@ -1,0 +1,176 @@
+name: 'Test Execution'
+description: 'Comprehensive test execution with coverage reporting and caching'
+inputs:
+  test-command:
+    description: 'Test command to run'
+    required: false
+    default: 'npm run test:coverage'
+  coverage-format:
+    description: 'Coverage output format'
+    required: false
+    default: 'lcov'
+  upload-coverage:
+    description: 'Upload coverage to external service'
+    required: false
+    default: 'true'
+  coverage-threshold:
+    description: 'Minimum coverage percentage required'
+    required: false
+    default: '80'
+  parallel:
+    description: 'Run tests in parallel'
+    required: false
+    default: 'true'
+  verbose:
+    description: 'Verbose test output'
+    required: false
+    default: 'false'
+
+outputs:
+  test-result:
+    description: 'Test execution result (pass/fail)'
+    value: ${{ steps.test-result.outputs.result }}
+  coverage-percentage:
+    description: 'Total coverage percentage'
+    value: ${{ steps.coverage-summary.outputs.percentage }}
+  tests-run:
+    description: 'Number of tests run'
+    value: ${{ steps.coverage-summary.outputs.tests }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache ESLint results
+      uses: actions/cache@v4
+      with:
+        path: .eslintcache
+        key: eslint-${{ runner.os }}-${{ hashFiles('eslint.config.js', 'lib/**/*.js', '__tests__/**/*.js', 'scripts/**/*.js') }}
+        restore-keys: |
+          eslint-${{ runner.os }}-
+          npm-${{ runner.os }}-
+
+    - name: Cache test results
+      uses: actions/cache@v4
+      with:
+        path: .vitest-cache
+        key: vitest-${{ runner.os }}-${{ hashFiles('vitest.config.js', 'lib/**/*.js', '__tests__/**/*.js') }}
+        restore-keys: |
+          vitest-${{ runner.os }}-
+          npm-${{ runner.os }}-
+
+    - name: Run linter with cache
+      id: lint
+      shell: bash
+      run: npm run lint
+      env:
+        ESLINT_CACHE: .eslintcache
+
+    - name: Lint summary
+      if: always()
+      shell: bash
+      run: |
+        echo "### 📏 Lint Results" >> $GITHUB_STEP_SUMMARY
+        if [ $? -eq 0 ]; then
+          echo "✅ ESLint passed with no issues" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ ESLint found issues" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Run tests with coverage
+      id: test
+      shell: bash
+      run: |
+        TEST_ARGS="--reporter=verbose"
+        if [ "${{ inputs.parallel }}" = "true" ]; then
+          TEST_ARGS="$TEST_ARGS --pool=threads --poolOptions.threads.isolate=false"
+        fi
+        
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          TEST_ARGS="$TEST_ARGS --reporter=verbose"
+        fi
+        
+        eval "${{ inputs.test-command }} $TEST_ARGS"
+
+      env:
+        VITEST_CACHE_DIR: .vitest-cache
+        CI: true
+
+    - name: Test result
+      id: test-result
+      shell: bash
+      run: |
+        if [ $? -eq 0 ]; then
+          echo "result=pass" >> $GITHUB_OUTPUT
+          echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "result=fail" >> $GITHUB_OUTPUT
+          echo "❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Generate coverage summary
+      id: coverage-summary
+      shell: bash
+      run: |
+        if [ -f "coverage/lcov.info" ]; then
+          PERCENTAGE=$(grep -o '[0-9]\+\.[0-9]\+%' coverage/lcov.info | tail -1 | sed 's/%//' || echo "0")
+          TESTS=$(find __tests__ -name "*.test.js" | wc -l || echo "0")
+          
+          echo "percentage=$PERCENTAGE" >> $GITHUB_OUTPUT
+          echo "tests=$TESTS" >> $GITHUB_OUTPUT
+          
+          echo "### 📊 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Coverage**: $PERCENTAGE%" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tests**: $TESTS test files" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "percentage=0" >> $GITHUB_OUTPUT
+          echo "tests=0" >> $GITHUB_OUTPUT
+          echo "⚠️ Coverage report not found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Check coverage threshold
+      id: coverage-check
+      shell: bash
+      run: |
+        COVERAGE=${{ steps.coverage-summary.outputs.percentage }}
+        THRESHOLD=${{ inputs.coverage-threshold }}
+        
+        if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+          echo "❌ Coverage $COVERAGE% is below threshold $THRESHOLD%" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        else
+          echo "✅ Coverage $COVERAGE% meets threshold $THRESHOLD%" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload coverage to Codecov
+      if: inputs.upload-coverage == 'true' && always()
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info
+        fail_ci_if_error: false
+        verbose: true
+        flags: unittests
+        name: codecov-umbrella
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      if: always()
+      with:
+        format: spdx
+        output-file: sbom.spdx.json
+
+    - name: Test execution summary
+      if: always()
+      shell: bash
+      run: |
+        echo "### 🧪 Test Execution Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ steps.test-result.outputs.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Coverage**: ${{ steps.coverage-summary.outputs.percentage }}%" >> $GITHUB_STEP_SUMMARY
+        echo "**Tests**: ${{ steps.coverage-summary.outputs.tests }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.test-result.outputs.result }}" = "pass" ]; then
+          echo "🎉 All quality checks passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "🚨 Quality checks failed" >> $GITHUB_STEP_SUMMARY
+        fi
