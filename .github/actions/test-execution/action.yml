@@ -40,6 +40,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y bc jq
+
     - name: Cache ESLint results
       uses: actions/cache@v4
       with:
@@ -57,6 +63,10 @@ runs:
         restore-keys: |
           vitest-${{ runner.os }}-
           npm-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
 
     - name: Run linter with cache
       id: lint
@@ -142,7 +152,7 @@ runs:
         fi
 
     - name: Upload coverage to Codecov
-      if: inputs.upload-coverage == 'true' && always()
+      if: inputs.upload-coverage == 'true' && always() && secrets.CODECOV_TOKEN != ''
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -151,6 +161,12 @@ runs:
         verbose: true
         flags: unittests
         name: codecov-umbrella
+
+    - name: Skip coverage upload if token missing
+      if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN == ''
+      shell: bash
+      run: |
+        echo "⚠️ Codecov token not configured, skipping coverage upload" >> $GITHUB_STEP_SUMMARY
 
     - name: Generate SBOM
       uses: anchore/sbom-action@v0

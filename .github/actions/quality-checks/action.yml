@@ -48,6 +48,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y bc
+
     - name: Cache ESLint results
       uses: actions/cache@v4
       with:

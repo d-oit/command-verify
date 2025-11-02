@@ -43,6 +43,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y bc jq
+
     - name: Install dependencies
       if: inputs.action == 'install'
       id: install
@@ -114,20 +120,20 @@ runs:
       run: |
         echo "⬆️ Updating dependencies..."
         
-        # Install npm-check-updates if not present
+        # Install npm-check-updates if not present (use npx to avoid global install)
         if ! command -v ncu >/dev/null 2>&1; then
-          npm install -g npm-check-updates
+          npm install npm-check-updates
         fi
         
         # Generate update plan
-        ncu --${{ inputs.update-strategy }} --jsonAll > update-plan.json
+        npx ncu --${{ inputs.update-strategy }} --jsonAll > update-plan.json || echo '{}' > update-plan.json
         
-        if [ -s "update-plan.json" ]; then
+        if [ -s "update-plan.json" ] && [ "$(cat update-plan.json | jq length)" -gt 0 ]; then
           echo "📋 Update plan generated"
-          jq -r 'to_entries[] | "- \(.key): \(.value.current) → \(.value.latest)"' update-plan.json >> $GITHUB_STEP_SUMMARY
+          npx jq -r 'to_entries[] | "- \(.key): \(.value.current) → \(.value.latest)"' update-plan.json >> $GITHUB_STEP_SUMMARY
           
           # Apply updates
-          ncu --${{ inputs.update-strategy }} --upgrade
+          npx ncu --${{ inputs.update-strategy }} --upgrade
           echo "✅ Dependencies updated"
         else
           echo "ℹ️ No updates available"
