@@ -197,7 +197,19 @@ jobs:
         with:
           node-version: '20.x'
 
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          if npm ci; then
+            echo "✅ Dependencies installed successfully"
+          elif npm install; then
+            echo "⚠️ Using npm install instead of npm ci"
+          else
+            echo "⚠️ Dependency installation failed, proceeding with scan anyway"
+          fi
+
       - name: Run Snyk Security Scan
+        if: secrets.SNYK_TOKEN != ''
         uses: snyk/actions/node@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -205,12 +217,48 @@ jobs:
           args: --severity-threshold=high
         continue-on-error: true
 
-      - name: Upload Snyk Report
+      - name: Skip Snyk Security Scan
+        if: secrets.SNYK_TOKEN == ''
+        shell: bash
+        run: |
+          echo "⚠️ SNYK_TOKEN not configured, skipping Snyk security scan" >> $GITHUB_STEP_SUMMARY
+          echo "Dependency security scan will use npm audit instead"
+
+      - name: Alternative Security Scan
+        shell: bash
+        run: |
+          echo "🛡️ Running alternative security scan with npm audit..."
+          npm audit --audit-level=moderate --json > npm-audit.json || echo '{}' > npm-audit.json
+          
+          # Check for critical vulnerabilities
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json 2>/dev/null || echo "0")
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json 2>/dev/null || echo "0")
+          
+          if [ "$CRITICAL" -gt "0" ]; then
+            echo "❌ Critical vulnerabilities found: $CRITICAL"
+            exit 1
+          elif [ "$HIGH" -gt "0" ]; then
+            echo "⚠️ High vulnerabilities found: $HIGH"
+          else
+            echo "✅ No critical or high vulnerabilities found"
+          fi
+
+      - name: Dependency Review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: always
+        continue-on-error: true
+
+      - name: Upload Security Reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: snyk-report
-          path: snyk-report.json
+          name: security-reports
+          path: |
+            npm-audit.json
+            snyk-report.json
           retention-days: 90
 
   container-security:

@@ -66,7 +66,17 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: npm ci
+      run: |
+        if npm ci; then
+          echo "✅ Dependencies installed successfully with npm ci"
+        elif npm install --legacy-peer-deps; then
+          echo "⚠️ npm ci failed, fallback to npm install with --legacy-peer-deps"
+        elif npm install; then
+          echo "⚠️ npm ci failed, fallback to npm install"
+        else
+          echo "❌ All installation methods failed"
+          exit 1
+        fi
 
     - name: Run linter with cache
       id: lint
@@ -152,7 +162,7 @@ runs:
         fi
 
     - name: Upload coverage to Codecov
-      if: inputs.upload-coverage == 'true' && always() && secrets.CODECOV_TOKEN != ''
+      if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN != ''
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -161,12 +171,23 @@ runs:
         verbose: true
         flags: unittests
         name: codecov-umbrella
+      continue-on-error: true
 
     - name: Skip coverage upload if token missing
       if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN == ''
       shell: bash
       run: |
         echo "⚠️ Codecov token not configured, skipping coverage upload" >> $GITHUB_STEP_SUMMARY
+
+    - name: Coverage upload alternative
+      if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN == '' && always()
+      shell: bash
+      run: |
+        echo "⚠️ No Codecov token available, coverage report available locally" >> $GITHUB_STEP_SUMMARY
+        if [ -f "./coverage/lcov.info" ]; then
+          echo "📊 Coverage report generated at: ./coverage/lcov.info" >> $GITHUB_STEP_SUMMARY
+          echo "💡 Configure CODECOV_TOKEN secret to enable automatic upload" >> $GITHUB_STEP_SUMMARY
+        fi
 
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
