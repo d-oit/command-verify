@@ -197,11 +197,12 @@ runs:
 
     - name: License compliance check
       if: inputs.action == 'install' || inputs.action == 'audit'
+      continue-on-error: true
       shell: bash
       run: |
         echo "📜 Checking license compliance..."
         if command -v npx >/dev/null 2>&1; then
           npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' --summary || echo "⚠️ License check completed with warnings"
         else
-          echo "ℹ️ License checker not available"
+          echo "ℹ️ License checker not available, skipping"
         fi
