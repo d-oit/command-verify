@@ -54,8 +54,10 @@ runs:
       id: install
       shell: bash
       run: |
-        echo "📦 Installing dependencies with: ${{ inputs.install-command }}"
-        eval "${{ inputs.install-command }}"
+        echo "📦 Installing dependencies"
+        
+        # Simple, direct installation approach
+        npm ci
         
         if [ "${{ inputs.verify-installed }}" = "true" ]; then
           echo "🔍 Verifying installation..."
