@@ -13,6 +13,10 @@ inputs:
     description: 'Upload coverage to external service'
     required: false
     default: 'true'
+  codecov-token:
+    description: 'Codecov token for coverage upload'
+    required: false
+    default: ''
   coverage-threshold:
     description: 'Minimum coverage percentage required'
     required: false
@@ -162,10 +166,10 @@ runs:
         fi
 
     - name: Upload coverage to Codecov
-      if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN != ''
+      if: inputs.upload-coverage == 'true' && inputs.codecov-token != ''
       uses: codecov/codecov-action@v4
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ inputs.codecov-token }}
         files: ./coverage/lcov.info
         fail_ci_if_error: false
         verbose: true
@@ -174,13 +178,13 @@ runs:
       continue-on-error: true
 
     - name: Skip coverage upload if token missing
-      if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN == ''
+      if: inputs.upload-coverage == 'true' && inputs.codecov-token == ''
       shell: bash
       run: |
         echo "⚠️ Codecov token not configured, skipping coverage upload" >> $GITHUB_STEP_SUMMARY
 
     - name: Coverage upload alternative
-      if: inputs.upload-coverage == 'true' && secrets.CODECOV_TOKEN == '' && always()
+      if: inputs.upload-coverage == 'true' && inputs.codecov-token == '' && always()
       shell: bash
       run: |
         echo "⚠️ No Codecov token available, coverage report available locally" >> $GITHUB_STEP_SUMMARY
