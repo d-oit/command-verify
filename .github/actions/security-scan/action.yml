@@ -13,6 +13,10 @@ inputs:
     description: 'Include Snyk security scan'
     required: false
     default: 'true'
+  snyk-token:
+    description: 'Snyk API token for security scanning'
+    required: false
+    default: ''
   sarif-output:
     description: 'Output file for SARIF results'
     required: false
@@ -114,16 +118,16 @@ runs:
         fi
 
     - name: Run Snyk Security Scan
-      if: inputs.include-snyk == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.SNYK_TOKEN != ''
+      if: inputs.include-snyk == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.snyk-token != ''
       uses: snyk/actions/node@v3.0.0
       continue-on-error: true
       env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
       with:
         args: --severity-threshold=${{ inputs.severity-threshold }} --sarif-file-output=${{ inputs.sarif-output }}
 
     - name: Skip Snyk Security Scan
-      if: inputs.include-snyk == 'true' && secrets.SNYK_TOKEN == ''
+      if: inputs.include-snyk == 'true' && inputs.snyk-token == ''
       shell: bash
       run: |
         echo "⚠️ Snyk token not configured, skipping Snyk security scan" >> $GITHUB_STEP_SUMMARY

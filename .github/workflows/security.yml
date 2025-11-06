@@ -33,6 +33,7 @@ jobs:
         with:
           severity-threshold: 'moderate'
           include-snyk: 'true'
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
 
   license-check:
     name: License Compliance Check

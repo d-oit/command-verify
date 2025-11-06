@@ -53,6 +53,7 @@ jobs:
           severity-threshold: ${{ inputs.severity-threshold }}
           include-snyk: 'true'
           fail-on-vulnerabilities: 'false'
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
 
   dependency-review:
     name: 'Dependency Review'

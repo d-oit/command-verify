@@ -59,6 +59,7 @@ jobs:
         uses: ./.github/actions/security-scan
         with:
           severity-threshold: 'moderate'
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
 
   verify-commands:
     name: 'Verify Documentation Commands'
