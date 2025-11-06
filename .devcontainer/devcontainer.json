@@ -27,6 +27,18 @@
           "javascript",
           "javascriptreact"
         ],
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[javascriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
         "prettier.configPath": ".prettierrc.json",
         "files.exclude": {
           "**/node_modules": true,
@@ -40,22 +52,21 @@
   "portsAttributes": {
     "3000": {
       "label": "Development Server",
-      "onAutoForward": true
+      "onAutoForward": "notify"
     },
     "8080": {
       "label": "Test Server",
-      "onAutoForward": true
+      "onAutoForward": "notify"
     }
   },
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "npm install && git config --global --add safe.directory ${containerWorkspaceFolder}",
+  "updateContentCommand": "npm install",
   "postAttachCommand": {
     "server": "npm run dev"
   },
   "remoteUser": "node",
   "mounts": [
-    "source=${localWorkspaceFolder}/.cache",
-      "target=/home/node/.cache",
-      "type=volume"
+    "source=${localWorkspaceFolder}/.cache,target=/home/node/.cache,type=volume"
   ],
   "runArgs": [
     "--cap-add=SYS_PTRACE",
@@ -64,5 +75,6 @@
   "remoteEnv": {
     "NODE_ENV": "development",
     "DEBUG": "command-verify:*"
-  }
+  },
+  "waitFor": "postCreateCommand"
 }
