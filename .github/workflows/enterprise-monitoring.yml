@@ -118,5 +118,5 @@ jobs:
         run: |
           echo "### ⚡ Performance Analytics" >> $GITHUB_STEP_SUMMARY
           echo "**Average Duration:** ${{ steps.analytics.outputs.avg_duration }} minutes" >> $GITHUB_STEP_SUMMARY
-          echo "**Monthly Cost Estimate:** $${{ steps.analytics.outputs.monthly_cost }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Monthly Cost Estimate:** ${{ steps.analytics.outputs.monthly_cost }}" >> $GITHUB_STEP_SUMMARY
           echo "**Total Analyzed Runs:** ${{ steps.analytics.outputs.total_runs }}" >> $GITHUB_STEP_SUMMARY

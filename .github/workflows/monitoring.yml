@@ -213,7 +213,7 @@ jobs:
           echo "| Metric | Value | Target | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|--------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Average Duration | ${{ steps.performance-analysis.outputs.avg_duration }}m | <5m | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Success Rate | ${{ steps.performance-analysis.outputs.success_rate }}% | >95% | $([ $(echo "${{ steps.performance-analysis.outputs.success_rate }} > 95" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Success Rate | ${{ steps.performance-analysis.outputs.success_rate }}% | >95% | $([ $(echo "${{ steps.performance-analysis.outputs.success_rate }}" | awk '{print ($1 > 95)}') -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
           echo "| Bottlenecks | ${{ steps.performance-analysis.outputs.bottlenecks_count }} | 0 | $([ ${{ steps.performance-analysis.outputs.bottlenecks_count }} -eq 0 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
 
   cost-optimization:

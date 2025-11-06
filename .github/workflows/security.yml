@@ -90,7 +90,7 @@ jobs:
           action: 'outdated'
 
       - name: Run OpenSSF Scorecard
-        uses: ossf/scorecard-action@main
+        uses: ossf/scorecard-action@v2.3.3
         with:
           results_file: results.sarif
           results_format: sarif

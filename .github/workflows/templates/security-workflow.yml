@@ -123,7 +123,7 @@ jobs:
 
       - name: 'Run TruffleHog'
         if: github.event_name != 'pull_request'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@3.85.0
         continue-on-error: true
         with:
           path: ./
