@@ -17,8 +17,11 @@ jobs:
       actions: read
       contents: read
       security-events: write
-    
+
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
       - name: Setup Environment
         uses: ./.github/actions/environment-setup
         with:
@@ -38,6 +41,9 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
       - name: Setup Environment
         uses: ./.github/actions/environment-setup
         with:
@@ -78,6 +84,9 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
       - name: Setup Environment
         uses: ./.github/actions/environment-setup
         with:

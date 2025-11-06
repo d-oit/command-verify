@@ -14,6 +14,9 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
       - name: Setup Environment
         uses: ./.github/actions/environment-setup
         with:
