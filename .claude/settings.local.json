@@ -1,9 +1,46 @@
 {
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJEb21pbmlrIE9zd2FsZCIsIlVzZXJOYW1lIjoiRG9taW5payBPc3dhbGQiLCJBY2NvdW50IjoiIiwiU3ViamVjdElEIjoiMTkxMjEzMDY4MTQ2NzU3MjY1OCIsIlBob25lIjoiIiwiR3JvdXBJRCI6IjE5MTIxMzA2ODE0NTkxODQwNTAiLCJQYWdlTmFtZSI6IiIsIk1haWwiOiJkbW1vdGVjQGdtYWlsLmNvbSIsIkNyZWF0ZVRpbWUiOiIyMDI1LTExLTA3IDA0OjMyOjEwIiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.SaF_4sYv9EU9F-0EUmcsuxncOg46rvvS273vv5zjwLcbMpPJLTORAnWkVwo7TrX2S79OeocnLCP3SIsDX2RLfQBxoZ9Hz3PUHAtVy9Z5z9G4l4U5n9FTKih7zj7IP1xyRYW_y1AbLtdTEeGFoDxpy27ge3KZpy5oRhRB685PPW0049DpoFW7QptRnbALNkOEC7m7d80b6FviihIteYqcM0aREOAS8VgT-0EHnX3fKo1u9_O4cLpasFFcyDa1r-y_PtzAbz1lHvh7qMeAii01oN4L1gRxD9ockNwid6VsxGpLACsR3wX2qlrBVBTOSVm8QzFzYOQqJw6UIm1ursqLBA",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "ANTHROPIC_MODEL": "MiniMax-M2",
+    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2"
+  },
   "permissions": {
     "allow": [
       "Skill(gemini-search:web-search-patterns)",
       "Bash(npm run verify:*)",
-      "Skill(command-verify)"
+      "Skill(command-verify)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh auth status)",
+      "Bash(gh pr list --state all)",
+      "Bash(gh run list --limit 20)",
+      "Bash(gh pr view 9 --json state,mergeable,mergeableState,statusCheckRollup)",
+      "Bash(gh run view 19148817678 --json status,conclusion,workflow)",
+      "Bash(gh pr view 9 --json state,mergeable,mergeStateStatus,statusCheckRollup,headRefName)",
+      "Bash(gh pr view 9 --json statusCheckRollup --jq '.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion}')",
+      "Bash(git add .github/)",
+      "Bash(git push -u origin fix-workflow-errors)",
+      "Bash(gh run list --limit 5)",
+      "Bash(gh run list --limit 10 --json status,conclusion,name,workflowName,headBranch)",
+      "Bash(gh run list --limit 1 --json databaseId)",
+      "Bash(gh run view 19149469616 --log)",
+      "Bash(gh run list --limit 1 --json databaseId --jq '.[0].databaseId')",
+      "Bash(gh run list --limit 5 --json databaseId,headBranch,workflowName,status,conclusion --jq '.[] | select(.headBranch == \"\"fix-workflow-errors\"\")')",
+      "Bash(gh run view 19149453567 --job License Compliance Check --log)",
+      "Bash(git commit -m \"🔧 Fix security-scan action secrets access\n\n- Add snyk-token input parameter to security-scan action\n- Remove direct secrets access (not allowed in composite actions)\n- Update all workflows to pass SNYK_TOKEN as input\n- Fixes: ''Unrecognized named-value: secrets'' error\")",
+      "Bash(gh run view 19149772682 --log)",
+      "Bash(git add .github/actions/test-execution/action.yml)",
+      "Bash(git commit -m \"🔧 Add codecov-token to workflow calls\n\n- Pass CODECOV_TOKEN secret as input to test-execution action\n- Updates: ci.yml, release.yml, ci-workflow template\n- This allows coverage upload when token is available\")",
+      "Bash(git push)",
+      "Bash(gh run list --limit 3 --json databaseId,headBranch,workflowName,status,conclusion --jq '.[] | select(.headBranch == \"\"fix-workflow-errors\"\")')",
+      "Bash(gh run view 19150008337 --log)",
+      "Bash(gh pr view 9 --json state,mergeable,mergeStateStatus,statusCheckRollup)",
+      "Bash(gh run view 19178918087 --job Test on Node.js 20.x --log)"
     ],
     "deny": [],
     "ask": []
