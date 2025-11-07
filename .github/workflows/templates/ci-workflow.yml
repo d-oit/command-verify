@@ -53,6 +53,7 @@ jobs:
         with:
           test-command: ${{ inputs.test-command }}
           upload-coverage: ${{ matrix.upload-coverage }}
+          codecov-token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: 'Security Scan'
         if: inputs.run-security-scan == 'true' && matrix.node-version == '20.x'

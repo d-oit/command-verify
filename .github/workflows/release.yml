@@ -47,6 +47,7 @@ jobs:
         with:
           test-command: 'npm run test:coverage'
           coverage-threshold: '80'
+          codecov-token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Quality Checks
         uses: ./.github/actions/quality-checks

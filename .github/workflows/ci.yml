@@ -59,6 +59,7 @@ jobs:
           test-command: 'npm run test:coverage'
           upload-coverage: ${{ matrix.upload-coverage }}
           coverage-threshold: '80'
+          codecov-token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0.17.0
