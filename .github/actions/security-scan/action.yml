@@ -29,6 +29,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y bc jq
+
     - name: Run npm audit
       id: audit
       shell: bash
@@ -97,13 +103,19 @@ runs:
         fi
 
     - name: Run Snyk Security Scan
-      if: inputs.include-snyk == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      if: inputs.include-snyk == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.SNYK_TOKEN != ''
       uses: snyk/actions/node@v3.0.0
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
         args: --severity-threshold=${{ inputs.severity-threshold }} --sarif-file-output=${{ inputs.sarif-output }}
+
+    - name: Skip Snyk Security Scan
+      if: inputs.include-snyk == 'true' && secrets.SNYK_TOKEN == ''
+      shell: bash
+      run: |
+        echo "⚠️ Snyk token not configured, skipping Snyk security scan" >> $GITHUB_STEP_SUMMARY
 
     - name: Upload SARIF results
       if: always()

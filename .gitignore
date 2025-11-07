@@ -118,5 +118,7 @@ nul
 .cache/command-validations/executions/
 .cache/command-validations/analyses/
 
+.claude/settings.local.json
+
 # Keep the checkpoint file in git (optional)
 !.cache/command-validations/last-validation-commit.txt
