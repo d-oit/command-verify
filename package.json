@@ -13,7 +13,7 @@
     "verify:stats": "node scripts/verify-commands.js --stats",
     "prerelease": "npm run verify",
     "prepush": "npm run verify",
-    "clean:cache": "rm -rf .cache/command-validations",
+    "clean:cache": "node -e \"const fs = require('fs'); const path = require('path'); function rmrf(dir) { if (fs.existsSync(dir)) { fs.readdirSync(dir).forEach(file => { const curPath = path.join(dir, file); if (fs.lstatSync(curPath).isDirectory()) { rmrf(curPath); } else { fs.unlinkSync(curPath); } }); fs.rmdirSync(dir); } }; rmrf('.cache/command-validations');\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest",
@@ -48,7 +48,7 @@
     "glob": "^11.0.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "repository": {
     "type": "git",
