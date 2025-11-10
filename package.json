@@ -64,7 +64,7 @@
     "@vitest/coverage-v8": "^4.0.6",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
-    "rollup": "^4.52.5",
+    "rollup": "^4.53.2",
     "vitest": "^4.0.5"
   }
 }
