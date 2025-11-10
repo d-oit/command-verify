@@ -134,7 +134,7 @@ jobs:
           echo "✅ Health metrics generated"
 
       - name: Upload Health Metrics
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: workflow-health-metrics
           path: workflow-health-metrics.json
@@ -289,7 +289,7 @@ jobs:
           echo "| Parallel Execution | 15% | Optimize job parallelism |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Cost Analysis
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: cost-analysis
           path: cost-analysis.json
