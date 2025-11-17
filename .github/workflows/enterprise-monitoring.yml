@@ -12,7 +12,7 @@ jobs:
     
     steps:
       - name: SLA Analysis
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         id: sla-analysis
         with:
           script: |
@@ -79,7 +79,7 @@ jobs:
     
     steps:
       - name: Calculate Performance Metrics
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: runs } = await github.rest.actions.listWorkflowRunsForRepo({
